@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.setting.mapper.SettingMapper">
+
+	<select id="selectCodeList" parameterType="CodeVO" resultType="CodeVO">
+		SELECT 
+			idx,
+		    parent,
+		    sort,
+		    type,
+		    writer,
+		    name,
+		    depth,
+		    use_flag
+		FROM code_manage
+		<where>
+			<if test="type != null and type != ''">
+				AND type = #{type}
+			</if>
+			<if test="useFlag != null and useFlag != ''">
+				AND use_flag = #{useFlag}
+			</if>
+			<choose>
+				<when test="idx != null and idx != ''">
+					AND idx = #{idx}
+				</when>
+				<when test="parent != null and parent != 0">
+					AND parent = #{parent}
+				</when>
+				<otherwise>
+					AND parent IS NULL
+				</otherwise>
+			</choose>			
+		</where>
+		ORDER BY sort, idx DESC
+	</select>
+	
+	<select id="selectCodeName" parameterType="CodeVO" resultType="hashMap">
+		<choose>
+			<when test="depth > 2">
+				SELECT 
+				    C.name AS c1_name,
+				    C2.name AS c2_name 
+				FROM
+				    code_manage C
+				    left join code_manage C2 on C.idx = C2.parent 
+				WHERE
+				    C2.idx = #{parent}
+			</when>
+			<otherwise>
+				SELECT 
+				    C.name AS c1_name				     
+				FROM
+				    code_manage C				     
+				WHERE
+				    C.idx = #{parent}
+			</otherwise>
+		</choose>
+	</select>
+	
+	<insert id="insertCode" parameterType="CodeVO">
+		INSERT INTO code_manage (idx, parent, type, writer, name, depth, use_flag)
+		VALUES (IF(#{idx} != 0, #{idx}, NULL), IF(#{parent} != 0, #{parent}, NULL), #{type}, #{writer}, #{name}, #{depth}, #{useFlag})
+		ON DUPLICATE KEY UPDATE parent = IF(#{parent} != 0, #{parent}, NULL), type = #{type}, writer = #{writer}, name = #{name}, depth = #{depth}, use_flag = #{useFlag}
+	</insert>	
+	
+	<update id="insertCodeSort" parameterType="list">
+		<foreach collection="list" item="item" index="index" separator=";">
+			UPDATE code_manage 
+			SET 
+			    sort = #{item.sort}
+			WHERE
+			    idx = #{item.idx}
+	    </foreach>	
+	</update>
+	
+	<select id="selectForUnit" parameterType="CodeVO" resultType="hashMap">
+		SELECT
+		    C2.idx, 
+		    C.name AS c1_name, 
+		    C2.name AS c2_name
+		FROM
+		    code_manage C
+		        LEFT JOIN
+		    code_manage C2 ON C.idx = C2.parent
+		WHERE
+		    C.type = #{type} AND C.depth = #{depth} AND C2.idx IS NOT NULL
+	</select>
+	
+	<select id="selectUnit" parameterType="Integer" resultType="UnitVO">
+		SELECT 
+		    *
+		FROM
+		    unit_manage
+		WHERE
+		    c_idx = #{idx}
+		ORDER BY u_code ASC
+	</select>
+	
+	<insert id="insertUnit" parameterType="list">
+		INSERT INTO unit_manage (idx, c_idx, writer, u_code, `min`, `max`, one_side, two_side)
+		VALUES 
+		<foreach collection="list" item="item" separator=",">		
+			(IF(#{item.idx} != 0, #{item.idx}, NULL), #{item.cIdx}, #{item.writer}, #{item.uCode}, #{item.min}, #{item.max}, #{item.oneSide}, #{item.twoSide})
+		</foreach>
+		ON DUPLICATE KEY UPDATE c_idx = VALUE(c_idx), writer = VALUE(writer), u_code = VALUE(u_code), `min` = VALUE(`min`), `max` = VALUE(`max`), one_side = VALUE(one_side), two_side = VALUE(two_side)
+	</insert>
+	
+	<delete id="deleteUnitList" parameterType="list">
+		DELETE FROM unit_manage
+		WHERE idx IN
+			<foreach collection="list"  open="(" close=")" separator="," item="idx">
+				#{idx}
+			</foreach>
+	</delete>
+	
+	
+	<select id="selectFeesList" parameterType="FeesVO" resultType="FeesVO">
+		SELECT
+		    idx,
+		    writer,
+		    type,
+		    category,
+		    per,
+		    insert_date
+		FROM
+		    fees_manage
+		WHERE type = #{type}
+		ORDER BY idx
+	</select>
+	
+	<insert id="insertFees" parameterType="FeesVO">
+		INSERT INTO fees_manage (idx, writer, type, category, per)
+		VALUES 
+		<foreach collection="list" item="item" index="index" separator=",">
+			(if(#{item.idx} != 0, #{item.idx}, NULL), #{item.writer}, #{item.type}, #{item.category}, #{item.per})
+		</foreach>
+		ON DUPLICATE KEY UPDATE writer = VALUE(writer), type = VALUE(type), category = VALUE(category), per = VALUE(per)
+	</insert>
+	
+	
+	<sql id="where">
+		<where>
+			<if test="idx != null and idx != ''">
+			    A.idx = #{idx}			
+			</if>
+			<if test="name != null and name != ''">
+				AND A.name LIKE CONCAT('%', #{name},'%')
+			</if>
+			<if test="id != null and id != ''">
+				AND A.id LIKE CONCAT('%', #{id},'%')
+			</if>		
+		</where>
+	</sql>
+	
+	<select id="selectAdminList" parameterType="AdminVO" resultType="AdminVO">
+		SELECT 
+		    A.idx,
+		    A.name,
+		    A.state,
+		    A.id,
+		    A.pw,
+		    A.email,
+		    A.phone,
+		    A.dpmt,
+		    A.grp,
+		    A.use_flag,
+		    A.insert_date,
+		    A.login_date,
+		    U.idx AS u_idx,
+		    U.pdt,
+		    U.odr,
+		    U.cal,
+		    U.etc,
+		    U.member,
+		    U.site,
+		    U.setting,
+		    U.stat,
+		    U.print
+		FROM
+		    admin A
+		        LEFT JOIN
+		    admin_auth U ON A.idx = U.a_idx
+		    <include refid="where"/>
+		ORDER BY A.insert_date desc 
+		<if test="searchType != 'EXCEL'">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+	
+	<select id="selectAdminCnt" parameterType="AdminVO" resultType="map">
+		SELECT count(A.idx) adminCnt
+		FROM
+		    admin A
+		        LEFT JOIN
+		    admin_auth U ON A.idx = U.a_idx
+		    <include refid="where"/>
+	</select>
+	
+	<insert id="insertAdmin" parameterType="AdminVO">
+		INSERT INTO admin (idx, name, id, pw, email, phone, dpmt, grp, use_flag)
+		VALUES (if(#{idx} != 0, #{idx}, NULL), #{name}, #{id}, #{pw}, #{email}, #{phone}, #{dpmt}, #{grp}, #{useFlag})
+		ON DUPLICATE KEY UPDATE name = VALUE(name), id = VALUE(id), pw = VALUE(pw), email = VALUE(email), phone = VALUE(phone), dpmt = VALUE(dpmt), grp = VALUE(grp), use_flag = VALUE(use_flag)
+		<selectKey keyProperty="idx" resultType="int" >
+			SELECT LAST_INSERT_ID()
+		</selectKey>
+	</insert>
+	
+	<insert id="insertAdminAuth" parameterType="AdminVO">
+		INSERT INTO admin_auth (idx, a_idx, pdt, odr, cal, etc, member, site, setting, stat, print)
+		VALUES (if(#{uIdx} != 0, #{uIdx}, NULL), #{idx}, #{pdt}, #{odr}, #{cal}, #{etc}, #{member}, #{site}, #{setting}, #{stat}, #{print})
+		ON DUPLICATE KEY UPDATE a_idx = value(a_idx), pdt = value(pdt), odr = value(odr), cal = value(cal), etc = value(etc), member = value(member), site = value(site), setting = value(setting), stat = value(stat), print = value(print)			
+	</insert>
+	
+	<update id="updateAdminList" parameterType="AdminVO">
+		UPDATE admin 
+		SET name = #{name}
+		   ,id = #{id}
+		   <if test="pw != null and pw != ''">
+			   ,pw = #{pw}		   
+		   </if>
+		   ,email = #{email}
+		   ,phone = #{phone}
+		   ,dpmt = #{dpmt}
+		   ,grp = #{grp}
+		   ,use_flag = #{useFlag}
+	    WHERE idx = #{idx}
+	</update>
+	
+	<update id="updateAdminAuth" parameterType="AdminVO">
+		UPDATE admin_auth
+		SET pdt = #{pdt}
+		   ,odr = #{odr}
+		   ,cal = #{cal}
+		   ,etc = #{etc}
+		   ,member = #{member}
+		   ,site = #{site}
+		   ,setting = #{setting}
+		   ,stat = #{stat}
+		   ,print = #{print}
+		WHERE a_idx = #{idx}
+	</update>
+	
+	<select id="adminIdChk" parameterType="AdminVO" resultType="Integer">
+		SELECT 
+		    COUNT(*)
+		FROM
+		    admin
+		WHERE
+		    id = #{id}
+		   	AND idx != #{idx}		   
+	</select>
+	<!-- /관리자 -->
+
+</mapper>
+

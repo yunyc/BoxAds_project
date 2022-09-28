@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.boxads.cash.mapper.CashMapper">
+	
+    <update id="increaseCash" statementType="CALLABLE" parameterType="CashVO">
+    	CALL p_cash_manage(
+			#{mIdx, mode=IN, jdbcType=INTEGER},
+			#{oIdx, mode=IN, jdbcType=INTEGER},
+			#{category, mode=IN, jdbcType=CHAR},
+			#{type, mode=IN, jdbcType=CHAR},
+			#{content, mode=IN, jdbcType=VARCHAR},
+			#{cashIncrease, mode=IN, jdbcType=INTEGER},	
+			#{endDate, mode=IN, jdbcType=VARCHAR},
+	    	#{out, mode=OUT, jdbcType=INTEGER}
+		)
+    </update>
+        
+    <update id="updateEstiCash" parameterType="hashMap">
+    	UPDATE member 
+		SET 
+			<choose>
+				<when test="inCome != null">
+				    esti_income = esti_income + #{inCome}
+				</when>
+				<when test="outCome != null">
+				    esti_outcome = esti_outcome + #{outCome}
+				</when>
+			</choose>			
+		WHERE
+			<choose>
+				<when test="inCome != null">
+				    idx = #{mIdx}
+				</when>
+				<when test="outCome != null">
+				    idx = (SELECT m_idx FROM order_info WHERE idx = #{oIdx})
+				</when>
+			</choose>		    
+    </update>
+
+
+    <sql id="where">       
+	    <if test='mIdx != null and mIdx != ""'>
+	        AND A.m_idx = #{mIdx}
+	    </if>
+	    <if test='type != null and type != ""'>
+	        AND A.type = #{type}
+	    </if>
+	    <if test="insertDate != null and insertDate != ''">
+	        AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &gt;= #{insertDate}
+	    </if>
+	    <if test="endDate != null and endDate != ''">
+	        AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &lt;= #{endDate}
+	    </if>
+	    <if test="category != null and category != ''">
+	        AND A.category = #{category}
+	    </if>
+	    <if test="keyword != null and keyword != ''">
+	        AND (
+	            A.content like CONCAT('%', #{keyword},'%')
+	            OR C.name like CONCAT('%', #{keyword},'%')
+	        )
+	    </if>       
+    </sql>
+    
+    <select id="selectCashLogList" parameterType="CashVO" resultType="CashVO">
+        SELECT A.idx
+        	  ,DATE_FORMAT(A.insert_date, '%y.%m.%d %H:%i:%s') AS insertDate
+              ,CASE WHEN A.category = 'P' then '수입'
+                    WHEN A.category = 'M' then '지출'
+               END AS category
+              ,CASE WHEN A.type = 'I' then '충전'
+                    WHEN A.type = 'S' then '판매'
+                    WHEN A.type = 'R' then '환불'
+                    WHEN A.type = 'B' then '구매'
+                    WHEN A.type = 'O' then '출금'
+                    WHEN A.type = 'E' then '소멸'
+               END AS type
+              ,A.content
+              ,C.name
+              ,A.cash_increase
+        FROM cash_log A
+        LEFT JOIN order_info B ON A.o_idx = B.idx
+        LEFT JOIN member C ON B.m_idx = C.idx
+        <where>
+	        <include refid="where"/>
+        </where>
+        ORDER BY A.idx DESC
+        <if test="end != null and end != 0">
+            LIMIT #{start}, #{end}
+        </if>
+    </select>
+    
+    <select id="selectCashLogCnt" parameterType="CashVO" resultType="map">
+        SELECT
+            COUNT(*) cashCnt
+        FROM cash_log A
+        LEFT JOIN order_info B ON A.o_idx = B.idx
+        LEFT JOIN member C ON B.m_idx = C.idx
+        <where>
+	        <include refid="where"/>
+        </where>
+    </select>
+    
+    <resultMap type="map" id="chargePrice">
+        <result property="idx" column="idx" javaType="int"/>
+        <result property="price" column="price" javaType="int"/>
+    </resultMap>
+    
+    <select id="selectChargePriceList" resultMap="chargePrice">
+        SELECT idx, price FROM cash_init
+        ORDER BY idx ASC
+    </select>
+    
+    <select id="selectChargePrice" parameterType="map" resultMap="chargePrice">
+        SELECT idx, price FROM cash_init
+        WHERE idx = #{idx} AND price = #{price}
+    </select>
+
+	<select id="selectCashList" parameterType="CashVO" resultType="hashMap">
+		SELECT 
+		    A.idx,
+		    cash_code AS cashCode,
+		    CASE
+		        WHEN type = 'CARD' THEN '신용카드'
+		        WHEN type = 'BANK' THEN '계좌이체'
+		    END AS type,
+		    cash,
+		    DATE_FORMAT(A.insert_date, '%y.%m.%d %H:%m:%s') AS insertDate,
+		    CASE 
+				WHEN type = 'CARD' THEN CONCAT(p_fn_nm, ' ', IF(p_int_mon = 0, '일시불', CONCAT(p_int_mon + 0, '개월')))
+		        WHEN type = 'BANK' THEN p_fn_nm
+		    END AS pStr,
+		    p_amt AS amt,
+		    M.name
+		FROM
+		    cash A
+		    JOIN member M ON M.idx = A.m_idx
+		<where>
+		    A.state = 'Y'
+			<if test='keyword != null and keyword != ""'>
+				<choose>
+					<when test='searchType == "cashCode"'>
+						AND A.cash_code LIKE CONCAT('%', #{keyword}, '%')
+					</when>
+					<when test='searchType == "name"'>
+						AND M.name LIKE CONCAT('%', #{keyword}, '%')	
+					</when>
+					<when test='searchType == "id"'>
+						AND M.id LIKE CONCAT('%', #{keyword}, '%')	
+					</when>				
+				</choose>
+			</if>
+			<if test='typeArr != null and typeArr.length != 0'>			
+				AND A.type IN(<foreach collection="typeArr" item="type" separator=",">#{type}</foreach>)
+			</if>
+	        <if test="insertDate != null and insertDate != ''">
+	        	AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &gt;= #{insertDate}
+		    </if>
+		    <if test="endDate != null and endDate != ''">
+		        AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &lt;= #{endDate}
+		    </if>       
+		</where>	    
+		ORDER BY A.insert_date DESC
+		<if test="excel != 'EXCEL' and end != 0">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+	
+	<select id="selectCashListCnt" parameterType="CashVO" resultType="int">
+		SELECT 
+		    COUNT(*)
+		FROM
+		    cash A
+		    JOIN member M ON M.idx = A.m_idx
+		<where>
+		    A.state = 'Y'
+		    <if test='keyword != null and keyword != ""'>
+				<choose>
+					<when test='searchType == "cashCode"'>
+						AND A.cash_code LIKE CONCAT('%', #{keyword}, '%')
+					</when>
+					<when test='searchType == "name"'>
+						AND M.name LIKE CONCAT('%', #{keyword}, '%')	
+					</when>
+					<when test='searchType == "id"'>
+						AND M.id LIKE CONCAT('%', #{keyword}, '%')	
+					</when>				
+				</choose>
+			</if>
+			<if test='typeArr != null and typeArr.length != 0'>			
+				AND A.type IN(<foreach collection="typeArr" item="type" separator=",">#{type}</foreach>)
+			</if>
+	        <if test="insertDate != null and insertDate != ''">
+	        	AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &gt;= #{insertDate}
+		    </if>
+		    <if test="endDate != null and endDate != ''">
+		        AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &lt;= #{endDate}
+		    </if>        
+		</where>		
+	</select>
+	
+	<update id="updateWithdrawCash" parameterType="hashMap">
+		UPDATE member 
+		SET withdraw_cash = withdraw_cash - (#{amount} + #{fee})
+		WHERE idx = #{mIdx};
+	</update>
+</mapper>
+

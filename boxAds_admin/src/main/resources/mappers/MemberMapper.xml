@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.boxads.member.mapper.MemberMapper">
+
+	<sql id="where">
+		<where>
+			<if test="idx != null and idx != ''">
+				AND M.idx = #{idx}
+			</if>
+			<if test="state != null and state != ''">
+				AND M.state = #{state}
+			</if>
+			<if test="insertDate != null and insertDate != ''">
+				AND DATE(M.insert_date) BETWEEN #{insertDate} AND #{endDate}
+			</if>
+			<if test="keyword != null and keyword != ''">
+				<choose>
+					<when test='searchType == "name"'>
+						AND M.name LIKE CONCAT('%', #{keyword},'%')
+					</when>
+					<when test='searchType == "id"'>
+						AND M.id LIKE CONCAT('%', #{keyword},'%')
+					</when>
+					<when test='searchType == "phone"'>
+						AND M.phone LIKE CONCAT('%', #{keyword},'%')
+					</when>
+				</choose>
+			</if>
+			<if test="confirmFlag != null and confirmFlag != ''">
+				AND M.confirm_flag = #{confirmFlag}
+			</if>
+		</where>
+	</sql>
+
+	<select id="selectMemberList" parameterType="memberVO" resultType="memberVO">
+		 SELECT M.name
+		 	   ,M.idx
+		 	   ,M.pw
+		 	   ,M.id
+		 	   ,M.state
+		 	   ,M.auth_flag
+		 	   ,M.authkey
+		 	   ,M.phone
+		 	   ,M.address
+		 	   ,M.company_name
+		 	   ,M.company_number
+		 	   ,(CASE WHEN M.confirm_flag = 'Y' THEN '인증'
+										        ELSE '미인증' END) confirmFlag
+		 	   ,M.confirm_date
+		 	   ,M.insert_date
+		 	   ,M.delete_date
+		 	   ,M.login_date
+		 	   ,M.login_cnt
+		 	   ,M.company_type
+		 	   ,M.sector
+		 	   ,M.business
+		 	   ,M.site_url
+		 	   ,M.intro
+		 	   ,M.pro_name
+		 	   ,M.pro_phone
+		 	   ,M.pro_address
+		 	   ,M.detail
+		 	   ,M.pro_detail
+		 	   ,M.agree
+		 	   ,M.quit_msg
+		 	   ,CF.idx fIdx
+		 	   ,CF.real_name companyFile
+		 	   ,CF.idx fIdx
+		 	   ,P.url profile
+		FROM member M
+   LEFT JOIN file CF
+		  ON M.idx = CF.parent AND CF.type = 'C'
+	LEFT JOIN file P
+	     ON M.idx = P.parent AND P.type = 'P' 
+		<include refid="where"/>
+		ORDER BY M.insert_date desc
+		<if test="excel != 'EXCEL'">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+	
+	<select id="selectMemberCnt" parameterType="memberVO" resultType="map">
+		SELECT COUNT(M.idx) memberCnt
+		  FROM member M
+		<include refid="where"/>
+	</select>
+	
+	<insert id="insertMemberList" parameterType="memberVO" useGeneratedKeys="true" keyProperty="idx">
+		INSERT INTO member(name, id, pw, phone, address, company_name, company_number, agree)
+	  				VALUES(#{name}, #{id}, #{pw}, #{phone}, #{address}, #{companyName}, #{companyNumber}, #{agree})
+	  		<selectKey keyProperty="idx" resultType="int" >
+				SELECT LAST_INSERT_ID()
+			</selectKey> 
+	</insert>
+	
+	
+	<update id="updateMemberList" parameterType="memberVO">
+		UPDATE member
+		<choose>
+			<when test="pw != null and pw != ''">
+				SET pw = #{pw}
+			</when>
+			<when test="loginCnt != null and loginCnt != 0">
+				SET login_date = curdate()
+		   	   	   ,login_cnt = #{loginCnt}
+			</when>
+			<when test="state != null and state != ''">
+				SET state = #{state}
+				   ,login_date = now()
+			</when>
+			<when test="confirmFlag != null and confirmFlag != ''">
+				SET confirm_flag = #{confirmFlag}
+					, confirm_date = NOW()
+			</when>
+			<otherwise>
+				SET id = #{id}
+				   ,phone = #{phone}
+				   ,address = #{address}
+				   ,company_name = #{companyName}
+				   ,company_number = #{companyNumber}
+				   ,company_type = #{companyType}
+				   ,name = #{name}
+				   ,site_url = #{siteUrl}
+				   ,sector = #{sector}
+				   ,business = #{business}
+				   ,intro = #{intro}
+				   ,pro_name = #{proName}
+				   ,pro_phone = #{proPhone}
+				   ,pro_address = #{proAddress}
+				   ,agree = #{agree}
+				   ,detail = #{detail}
+				   ,pro_detail = #{proDetail}
+				   <if test="confirmFlag != null and confirmFlag != ''">
+						,confirm_flag = #{confirmFlag}
+						,confirm_date = now()
+					</if>
+				   
+			</otherwise>
+		</choose>
+		WHERE idx = #{idx}
+	</update>
+	
+	<delete id="deleteMemberList">
+		DELETE FROM member
+		 WHERE idx = #{idx}
+		 <if test="fileType != null and fileType != ''">
+		 	AND file_type = #{fileType}
+		 </if>
+	</delete>
+	
+	<select id="selectHumunList" parameterType="String" resultType="memberVO">
+	    SELECT *
+		  FROM member
+		  <choose>
+		  	<when test="_parameter != null and _parameter != ''">
+		  		WHERE NOW() BETWEEN DATE_ADD(login_date, INTERVAL 11 MONTH) AND DATE_ADD(login_date, INTERVAL 12 MONTH)
+		  	</when>
+		  	<otherwise>
+		  		WHERE DATE_ADD(login_date, INTERVAL 12 MONTH) <![CDATA[<]]> NOW()
+		  	</otherwise>
+		  </choose>
+		  
+		 
+	</select>
+	
+	<select id="selectConfirmList" parameterType="memberVO" resultType="map">
+		SELECT C.idx
+		      ,C.m_idx
+		      ,C.f_idx
+		      ,C.name
+		      ,C.address
+		      ,C.company_name companyName
+		      ,C.company_number companyNumber
+		      ,C.insert_date insertDate
+		      ,F.real_name realName
+		      ,F.idx fIdx
+		 FROM confirm_log C
+	LEFT JOIN file F
+	       ON C.m_idx = F.parent AND F.type = 'C'
+	    WHERE m_idx = #{idx}
+		 
+	</select>
+	
+	<insert id="insertConfirmList" parameterType="memberVO">
+		INSERT INTO confirm_log (m_idx, f_idx, name, address, company_name, company_number)
+						 VALUES (#{idx}, #{fIdx}, #{name}, #{address}, #{companyName}, #{companyNumber})
+	</insert>
+	
+	<select id="selectCash" parameterType="int" resultType="int">
+		SELECT 
+			own_cash - withdraw_cash
+		FROM
+		    member
+		WHERE
+		    idx = #{value} 
+	</select>
+	
+	
+
+	<select id="selectMessageList" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    G.*, M1.name AS wName, M2.name AS rName
+		FROM
+		    message G
+		        JOIN
+		    member M1 ON M1.idx = G.writer
+		        JOIN
+		    member M2 ON M2.idx = G.receiver
+		    <where>
+		    	<choose>
+		    		<when test="searchType == 'name'">
+		    			AND (M1.name LIKE CONCAT('%', #{keyword},'%')
+		    			OR M2.name LIKE CONCAT('%', #{keyword},'%'))
+		    		</when>
+		    		<when test="searchType == 'id'">
+		    			AND (M1.id LIKE CONCAT('%', #{keyword},'%')
+		    			OR M2.id LIKE CONCAT('%', #{keyword},'%'))
+		    		</when>
+		    		<when test="searchType == 'phone'">
+		    			AND (M1.phone LIKE CONCAT('%', #{keyword},'%')
+		    			OR M2.phone LIKE CONCAT('%', #{keyword},'%'))
+		    		</when>
+		    	</choose>
+		    	<if test="startDate != null and startDate != ''">
+					AND DATE(G.insert_date) BETWEEN #{startDate} AND #{endDate}
+				</if>
+		    </where>
+		ORDER BY insert_date DESC
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selectMessageListCnt" parameterType="hashMap" resultType="int">
+		SELECT 
+		    COUNT(G.idx) AS cnt
+		FROM
+		    message G
+		        JOIN
+		    member M1 ON M1.idx = G.writer
+		        JOIN
+		    member M2 ON M2.idx = G.receiver
+		    <where>
+		    	<choose>
+		    		<when test="searchType == 'name'">
+		    			AND (M1.name LIKE CONCAT('%', #{keyword},'%')
+		    			OR M2.name LIKE CONCAT('%', #{keyword},'%'))
+		    		</when>
+		    		<when test="searchType == 'id'">
+		    			AND (M1.id LIKE CONCAT('%', #{keyword},'%')
+		    			OR M2.id LIKE CONCAT('%', #{keyword},'%'))
+		    		</when>
+		    		<when test="searchType == 'phone'">
+		    			AND (M1.phone LIKE CONCAT('%', #{keyword},'%')
+		    			OR M2.phone LIKE CONCAT('%', #{keyword},'%'))
+		    		</when>
+		    	</choose>
+		    	<if test="startDate != null and startDate != ''">
+					AND DATE(G.insert_date) BETWEEN #{startDate} AND #{endDate}
+				</if>
+		    </where>
+	</select>
+	
+	<select id="selectBankInfo" parameterType="int" resultType="hashMap">
+		SELECT 
+			B.idx,
+		    B.m_idx,
+		    B.bank,
+		    B.acc_number,
+		    B.insert_date,
+		    B.depositor,
+		    F.idx AS fIdx,
+		    F.real_name
+		FROM
+		    bank_info B
+		LEFT JOIN
+    		file F ON B.idx = F.parent AND type = 'CB'
+		WHERE
+		    m_idx = #{value}
+	</select>
+</mapper>
+

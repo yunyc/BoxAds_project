@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.boxads.product.mapper.ProductMapper">
+
+	<sql id="where">
+		<where>
+			<if test="idx != null and idx != 0">
+				AND B.idx = #{idx}
+			</if>
+			<if test="writer != null and writer != ''">
+				AND B.writer = #{writer}
+			</if>
+			<if test="title != null and title != ''">
+				AND B.title LIKE CONCAT('%', #{title}, '%')
+			</if>
+			<if test="adStartDate != null and adStartDate != ''">
+				AND DATE(B.insert_date) between #{adStartDate} AND #{adEndDate}
+			</if>
+			<if test="stateList != null and stateList.length != 0">
+		    	AND B.state IN(<foreach collection="stateList" item="stateList" separator=",">#{stateList}</foreach>) 
+		   </if>
+			<if test="name != null and name != ''">
+				AND M.name = #{name}
+			</if>
+			<if test="keyword != null and keyword != ''">
+				<choose>
+				<when test='searchType == "no"'>
+					<choose>
+						<when test='type == "A"'>
+							AND B.ad_code LIKE CONCAT('%', #{keyword}, '%')
+						</when>
+						<otherwise>
+							AND B.box_code LIKE CONCAT('%', #{keyword}, '%')
+						</otherwise>
+					</choose>
+				</when>
+				<when test='searchType == "title"'>
+					AND B.title LIKE CONCAT('%', #{keyword}, '%')
+				</when>
+				<when test='searchType == "name"'>
+					AND M.name LIKE CONCAT('%', #{keyword}, '%')
+				</when>
+			</choose>
+			</if>
+			
+		</where>
+	</sql>
+	
+	<select id="selectProductList" parameterType="ProductVO" resultType="ProductVO">
+		<choose>
+			<when test='type == "A"'>
+				SELECT Q.url AS qrcode,
+						B.idx
+				      ,(CASE WHEN B.state = 'N' THEN '광고대기'
+				             WHEN B.state = 'Y' THEN '광고중'
+				             WHEN B.state = 'P' THEN '광고중지'
+							 WHEN B.state = 'E' THEN '광고완료' END) state
+				      ,B.title
+				      ,B.content
+				      ,B.writer
+				      ,B.p_c_Idx 
+				      ,B.c_c_Idx 
+				      ,B.ctm_age 
+				      ,B.ctm_gender 
+				      ,B.ctm_type 
+				      ,B.url
+				      ,B.intro
+				      ,B.ad_code pNo
+				      ,FORMAT(B.view_cnt, 0) viewCnt 
+				      ,B.insert_date 
+				      ,CONCAT(date_format(B.ad_start_date, '%Y.%m.%d'), ' ~ ' ,date_format(B.ad_end_date, '%Y.%m.%d')) adStartDate
+				      ,view_start_date viewStartDate
+				      ,view_end_date viewEndDate
+				      ,M.name
+				      ,C1.name fir
+				      ,C2.name sec
+				      ,C3.name thr
+				      ,C4.name fth
+				      ,C5.name fif
+				      ,P1.name secPro
+				      ,P2.name thrPro
+				      ,FORMAT(count(DISTINCT O.idx), 0) odCnt
+					  ,FORMAT(count(DISTINCT W.idx), 0) favCnt
+				      FROM ad_product B
+				LEFT JOIN member M
+						ON M.idx = B.writer
+				LEFT JOIN file F
+						ON F.parent = M.idx
+				LEFT JOIN code_manage C1
+						ON C1.idx = SUBSTRING(B.c_c_idx, 1, 1)
+				LEFT JOIN code_manage C2
+						ON C2.idx = SUBSTRING(B.c_c_idx, 3, 1)
+				LEFT JOIN code_manage C3
+						ON C3.idx = SUBSTRING(B.c_c_idx, 5, 1)
+				LEFT JOIN code_manage C4
+						ON C4.idx = SUBSTRING(B.c_c_idx, 7, 1)
+				LEFT JOIN code_manage C5
+						ON C5.idx = SUBSTRING(B.c_c_idx, 9, 1)
+				LEFT JOIN code_manage P2
+						ON B.p_c_idx = P2.idx
+				LEFT JOIN code_manage P1
+						ON P2.parent = P1.idx
+				LEFT JOIN wish_product W
+						ON W.fav_idx = B.idx AND W.type = 'A'
+				LEFT JOIN order_info O
+						ON O.a_idx = B.idx AND O.state LIKE 'A%'
+				LEFT JOIN qrcode Q on Q.parent = B.idx
+				  <include refid="where"/>
+				  GROUP BY B.idx
+				ORDER BY insert_date desc
+				<if test="excel != 'EXCEL'">
+					LIMIT #{start}, #{end}		
+				</if>
+			</when>
+			<otherwise>
+				SELECT B.idx
+						,(CASE WHEN B.state = 'N' THEN '판매대기'
+						       WHEN B.state = 'Y' THEN '판매중'
+						       WHEN B.state = 'P' THEN '판매중지'
+							   WHEN B.state = 'E' THEN '판매완료' END) state
+						,B.title
+						,B.content
+						,B.intro
+						,B.writer
+						,B.p_c_idx
+						,B.c_c_idx
+						,B.ctm_age
+						,B.ctm_gender
+						,B.ctm_type
+						,B.avg_price
+						,B.url
+						,B.box_code pNo
+						,B.pdt_cnt
+						,B.box_cnt
+						,FORMAT(B.view_cnt, 0) viewCnt
+						,B.unit
+						,date_format(B.sell_date, '%Y년 %m월') sellDate
+						,B.insert_date
+						,CONCAT(FORMAT(B.ad_price, 0), '원') adPrice
+						,M.name
+						,C1.name secCtg
+						,C2.name thrCtg
+						,P1.name secPro
+						,P2.name thrPro
+						,CONCAT(FORMAT(count(DISTINCT O.idx), 0), '/', B.pdt_cnt) odCnt
+						,FORMAT(count(DISTINCT W.idx), 0) favCnt
+					FROM box_product B
+				LEFT JOIN member M
+						ON M.idx = B.writer
+				LEFT JOIN file F
+						ON F.parent = M.idx
+				LEFT JOIN code_manage C2
+						ON B.c_c_idx = C2.idx
+				LEFT JOIN code_manage C1
+						ON C2.parent = C1.idx
+				LEFT JOIN code_manage P2
+						ON B.p_c_idx = P2.idx
+				LEFT JOIN code_manage P1
+						ON P2.parent = P1.idx
+				LEFT JOIN wish_product W
+						ON W.fav_idx = B.idx AND W.type = 'B'
+				LEFT JOIN order_info O
+						ON O.b_idx = B.idx AND O.state LIKE 'B%'
+					<include refid="where"/>
+					GROUP BY B.idx
+				ORDER BY B.insert_date desc
+				<if test="excel != 'EXCEL'">
+					LIMIT #{start}, #{end}		
+				</if>
+			</otherwise>
+		</choose>
+	</select>
+	
+	<select id="selectProductCnt" parameterType="ProductVO" resultType="map">
+		SELECT count(B.idx) productCnt
+			<choose>
+				<when test='type == "A"'>
+					FROM ad_product B
+				</when>
+			<otherwise>
+					FROM box_product B
+			</otherwise>
+				</choose>
+				LEFT JOIN member M
+				       ON M.idx = B.writer
+		<include refid="where"/>
+	</select>
+	
+	<update id="updateProductList" parameterType="ProductVO">
+		<choose>
+			<when test='type == "A"'>
+				UPDATE ad_product
+			</when>
+			<otherwise>
+				UPDATE box_product
+			</otherwise>
+		</choose>
+					SET title = #{title}
+					   ,c_c_idx = #{cCIdx}
+					   ,ctm_age = #{ctmAge}
+					   ,ctm_gender = #{ctmGender}
+					   ,ctm_type = #{ctmType}
+					   ,url = #{url}
+					   ,intro = #{intro}
+					   ,state = #{state}
+					   ,content = #{content}
+			<choose>
+				<when test='type == "A"'>
+					,ad_start_date = #{adStartDate}
+					,ad_end_date = #{adEndDate}
+					,p_c_idx = #{pCIdx}
+				</when>
+				<otherwise>
+					,avg_price = #{avgPrice}
+					,sell_date = #{sellDate}		
+				</otherwise>
+			</choose>
+		WHERE idx = #{idx}
+	</update>
+	
+	<insert id="insertReason" parameterType="map">
+		INSERT INTO reason (parent, state, content, type)
+		VALUES (#{parent}, #{state}, #{content}, #{type})
+	</insert>
+	
+	<select id="selectReason" parameterType="map" resultType="map">
+		SELECT idx
+		      ,parent
+		      ,(CASE WHEN state = 'O' THEN '1차'
+					 WHEN state = 'T' THEN '2차'
+					 ELSE state END) AS state
+		      ,content
+		      ,type
+		      ,DATE_FORMAT(insert_date, '%Y.%m.%d') insertDate
+		 FROM reason
+		 WHERE parent = #{parent} AND type = #{type}
+		 ORDER BY insert_date desc
+	</select>
+</mapper>
+

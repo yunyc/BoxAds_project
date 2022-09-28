@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.print.mapper.PrintMapper">
+
+	<sql id="where">
+		<where>
+			<if test='searchKeyword != null and searchKeyword != ""'>
+				<choose>
+					<when test='searchType == "OD"'>
+						AND O.order_code LIKE CONCAT('%', #{searchKeyword}, '%')
+					</when>
+					<when test='searchType == "AD"'>
+						AND A.title LIKE CONCAT('%', #{searchKeyword}, '%')	
+					</when>
+					<when test='searchType == "BX"'>
+						AND B.title LIKE CONCAT('%', #{searchKeyword}, '%')	
+					</when>
+				</choose>
+			</if>
+			<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+				AND DATE(A.insert_date) between #{startDate} AND #{endDate}
+			</if>
+			<if test="state != null and state != ''">
+				AND RD.state = #{state}
+			</if>
+			<if test="idx != null and idx != 0">
+		 	 	AND O.idx = #{idx}
+		 	 </if>
+		</where>
+	</sql>
+	
+	<select id="selectPrintList" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    O.idx,
+		    O.order_code AS orderCode,
+		    B.title AS boxTitle,
+		    A.title AS adTitle,
+		    DATE_FORMAT(B.sell_date, '%Y.%m') AS sellDate,
+		    CONCAT(P2.name, ' ', P.name) AS pro,
+		    FORMAT(B.box_cnt, 0) AS boxCnt,
+		    DATE_FORMAT(RA.insert_date, '%y.%m.%d %H:%m:%s') AS insertDate,
+		    IF(RD.state = 'B9' OR RD.state = 'B11', DATE_FORMAT(RD.insert_date, '%y.%m.%d %H:%m:%s'), '-') AS recentDate,
+		    RD.state
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN 
+			print_log RD ON RD.idx = (SELECT idx FROM print_log WHERE O.idx = o_idx ORDER BY insert_date DESC LIMIT 1)
+				LEFT JOIN 
+			print_log RA ON RA.idx = (SELECT idx FROM print_log WHERE O.idx = o_idx ORDER BY insert_date ASC LIMIT 1)
+		        LEFT JOIN
+		    code_manage P ON P.idx = A.p_c_idx AND P.type = 'P'
+		        LEFT JOIN
+		    code_manage P2 ON P2.idx = P.parent AND P2.type = 'P'
+		    <include refid="where"/>
+		ORDER BY O.insert_date DESC
+		<if test="excel != 'EXCEL' and end != 0">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+		
+	<select id="selectPrintCnt" parameterType="hashMap" resultType="int">
+		SELECT 
+		    COUNT(DISTINCT O.idx)
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN 
+			print_log RD ON RD.idx = (SELECT idx FROM print_log WHERE O.idx = o_idx ORDER BY insert_date DESC LIMIT 1)
+				LEFT JOIN 
+			print_log RA ON RA.idx = (SELECT idx FROM print_log WHERE O.idx = o_idx ORDER BY insert_date ASC LIMIT 1)
+		        LEFT JOIN
+		    code_manage P ON P.idx = A.p_c_idx AND P.type = 'P'
+		        LEFT JOIN
+		    code_manage P2 ON P2.idx = P.parent AND P2.type = 'P'
+		    <include refid="where"/>
+	</select>
+	
+	<select id="selectPrintDetail" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    O.idx,
+		    O.order_code AS orderCode,
+		    DATE_FORMAT(R.insert_date, '%Y.%m.%d') AS insertDate,
+		    AP2.name AS adPro1,
+		    AP.name AS adPro2,
+		    FORMAT(B.box_cnt, 0) AS boxCnt,
+		    IF(A.side = 'T', '양면', '단면') AS side,
+		    DATE_FORMAT(B.sell_date, '%Y.%m') AS sellDate,
+		    B.box_code AS boxCode,
+		    B.title AS boxTitle,
+		    CONCAT(BC2.name, ' > ', BC.name) AS boxCate,
+		    CONCAT(BP2.name, ' ', BP.name) AS boxPro,
+		    BM.name AS boxName,
+		    BM.pro_name AS mkName,
+		    BM.pro_phone AS mkphone,
+		    CONCAT(BM.pro_address, ' ', BM.pro_detail) AS mkAddress,
+		    A.idx AS aIdx,
+		    A.ad_code AS adCode,
+		    A.title AS adTitle,
+		    GROUP_CONCAT(AC.name) AS cate,
+		    CONCAT(AP2.name, ' ', AP.name) AS adPro,
+		    A.url,
+		    AM.name AS adName
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    member BM ON BM.idx = B.writer
+		        JOIN
+		    member AM ON AM.idx = A.writer
+		        LEFT JOIN
+    		print_log R ON R.o_idx = O.idx AND R.state = 'B4'
+		        LEFT JOIN
+		    code_manage AP ON AP.idx = A.p_c_idx AND AP.type = 'P'
+		        LEFT JOIN
+		    code_manage AP2 ON AP2.idx = AP.parent AND AP2.type = 'P'
+		        LEFT JOIN
+		    code_manage BP ON BP.idx = B.p_c_idx AND BP.type = 'P'
+		        LEFT JOIN
+		    code_manage BP2 ON BP2.idx = BP.parent AND BP2.type = 'P'
+		        LEFT JOIN
+		    code_manage AC ON FIND_IN_SET(AC.idx, A.c_c_idx)
+		        LEFT JOIN
+		    code_manage BC ON BC.idx = B.c_c_idx AND BC.type = 'C'
+		        LEFT JOIN
+		    code_manage BC2 ON BC2.idx = BC.parent AND BC.type = 'C'
+		    <include refid="where"/>
+		GROUP BY O.idx			
+	</select>
+	
+	<select id="selectPrintLog" parameterType="PrintVO" resultType="PrintVO">
+		SELECT 
+		    R.idx,
+		    R.o_idx,
+		    R.state,
+		    R.content,
+		    R.delivery,
+		    R.mesg,
+		    DATE_FORMAT(R.insert_date, '%y.%m.%d') AS insert_date,
+		    F.idx AS fIdx,
+		    F.real_name,
+		    F.url
+		FROM
+		    print_log R
+		        LEFT JOIN
+		    file F ON R.idx = F.parent
+		        AND F.type IN ('B6' , 'B9')
+		<where>
+			R.o_idx = #{idx}
+		</where>		    
+		ORDER BY R.insert_date ASC
+	</select>
+	
+	<select id="selectPrintDashCnt" resultType="hashMap">
+		SELECT 
+		    COUNT(IF(state = 'B4', idx, NULL)) AS b4Cnt,
+		    COUNT(IF(state = 'B5', idx, NULL)) AS b5Cnt,
+		    COUNT(IF(state = 'B6', idx, NULL)) AS b6Cnt,
+		    COUNT(IF(state = 'B7', idx, NULL)) AS b7Cnt,
+		    COUNT(IF(state = 'B8', idx, NULL)) AS b8Cnt,
+		    COUNT(IF(state = 'B9', idx, NULL)) AS b9Cnt
+		FROM (
+			SELECT B.* FROM 
+			(SELECT o_idx, MAX(insert_date) as insert_date FROM print_log GROUP BY o_idx) A
+		    LEFT JOIN print_log B ON A.o_idx = B.o_idx AND A.insert_date = B.insert_date
+		) AS temp
+
+	</select>
+</mapper>
+

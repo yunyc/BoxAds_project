@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  <mapper namespace="com.boxads.order.mapper.LogMapper">
+ 	
+	<insert id="insertProcessLog" parameterType="LogVO">
+		INSERT INTO process_log (o_idx, type, content, action_flag, mesg, reciver, delivery, action)
+		VALUES (#{oIdx}, #{type}, #{content}, #{actionFlag}, #{mesg}, #{reciver}, #{delivery}, #{action});
+		    <selectKey keyProperty="idx" resultType="int" order="AFTER">
+				SELECT LAST_INSERT_ID()
+			</selectKey>
+						
+		    <if test="type == 'B15-2' or type == 'B20-2'">
+				INSERT INTO reason (parent, state, content, type)
+				VALUES (#{oIdx}, #{reasonState}, #{mesg}, #{reasonType});
+		    </if>
+	</insert>
+	
+	<insert id="insertPrintLog" parameterType="LogVO">
+		INSERT INTO print_log (o_idx, state, content, delivery, mesg)
+		VALUES (#{oIdx}, #{printState}, #{printContent}, #{delivery}, #{mesg})
+		
+		<selectKey keyProperty="idx" resultType="int" >
+			SELECT LAST_INSERT_ID()
+		</selectKey>
+	</insert>
+	
+	<select id="selectProcessLog" parameterType="LogVO" resultType="LogVO">		
+		SELECT 
+		    R.idx,
+		    R.o_idx,
+		    R.type,
+		    R.content,
+		    R.action_flag,
+		    R.insert_date,
+		    R.mesg,
+		    R.reciver,
+		    R.delivery,
+		    R.action,
+		    GROUP_CONCAT(F.real_name) AS real_name,
+    		GROUP_CONCAT(F.url) AS url
+		FROM
+		    process_log R
+		        LEFT JOIN
+		    file F ON F.parent = R.idx AND F.type in ('B14', 'B19')
+		<where>
+			<choose>
+		    	<when test='type == "A"'>
+		    		AND reciver IN ('T', 'A')
+		    	</when>
+		    	<when test='type == "B"'>
+		    		AND reciver IN ('T', 'B')
+		    	</when>
+		    </choose>
+		    AND R.o_idx = #{oIdx}
+		</where>		    		
+		GROUP BY R.idx    
+		ORDER BY R.insert_date DESC , R.idx DESC
+		<if test="end != 0">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+		
+	<select id="selectLogCnt" parameterType="LogVO" resultType="map">
+		SELECT COUNT(idx) logCnt
+		FROM process_log
+		WHERE o_idx = #{oIdx}		    		    
+	</select>
+	
+	<select id="selectPrintLogChk" parameterType="int" resultType="int">
+		SELECT 
+		    COUNT(idx) AS cnt
+		FROM
+		    print_log
+		WHERE
+		    o_idx = #{value}
+	</select>
+
+</mapper>
+
