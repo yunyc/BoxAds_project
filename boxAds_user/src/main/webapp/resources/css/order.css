@@ -1,0 +1,53 @@
+.sub_wrap.order_wrap .box_wrap {padding-top:20px;}
+.sub_wrap.order_wrap .box_wrap.pos_top {margin-bottom:20px;    border-top: 1px solid #eaeaea;}
+.sub_wrap.order_wrap .box_wrap .table_wrap_dl {border-top:none;}
+.sub_wrap.order_wrap .box_wrap .more,.sub_wrap.order_wrap .ads_wrap .more {position:absolute;right:0;top:0;    line-height: 20px;font-size:14px;color:#525252;padding-left:3px;margin-top: -3px;}
+.sub_wrap.order_wrap .box_wrap .more:after,.sub_wrap.order_wrap .ads_wrap .more:after{content:'';position:absolute;background-color:#525252;bottom:0;left:0;right:1px;height:1px;}
+.sub_wrap.order_finish_wrap .order_info_wrap .order_info_box {padding-left:103px;background-repeat:no-repeat;background-position:left bottom;background-image:url(../images/order/logo.png);margin-bottom:50px;}
+.sub_wrap.order_finish_wrap .order_info_wrap .order_info_box p {font-size:20px;margin-bottom:10px;}
+.sub_wrap.order_finish_wrap .order_info_wrap  .order_info_box .order_sum {line-height:34px;display:inline-block;padding:0 20px;border:1px solid #ccc;border-radius:5px;color:#929292;font-size:14px;}
+.sub_wrap.order_wrap .box_area02 > a { pointer-events:none;}
+.sub_wrap.order_wrap .box_area02 .goods_info {margin-top:10px;}
+.sub_wrap.order_wrap .box_area02 .goods_info .data {color:#525252;font-size:13px;font-weight:300;}
+.sub_wrap.order_wrap .box_area02 .goods_info .data span:after{content:',';}
+.sub_wrap.order_wrap .box_area02 .goods_info .data span:last-of-type:after {content:none;}
+.sub_wrap.order_wrap .box_area02 .goods_info .term {font-size:16px;color:#222;font-weight:500;margin-top:10px;}
+.sub_wrap.order_wrap .box_area02 .goods_info .term span {font-weight:400;}
+.sub_wrap .box_area02 .text_box .small_tit em {padding:0 8px;position:relative;}
+.sub_wrap .box_area02 .text_box .small_tit em:before{content:'';background-color:#929292;height:10px;width:1px;left:0;top:50%;margin-top:-5px;position:absolute;}
+.sub_wrap .box_area02 .text_box .small_tit em:first-of-type {padding-left:0;}
+.sub_wrap .box_area02 .text_box .small_tit em:first-of-type:before{content:none;}
+.sub_wrap.order_finish_wrap  .table_wrap_dl .row-2.m_border dl.link  {display:none;}
+
+
+@media only screen and (max-width:768px) {
+
+.sub_wrap.order_finish_wrap .order_info_wrap {padding:0 20px;}
+.sub_wrap.order_finish_wrap .order_info_wrap .order_info_box p {font-size:17px;}
+.sub_wrap.order_finish_wrap .order_info_wrap .order_info_box {    background-image: url(../images/order/logo_m.png);background-size:79px 69px;margin-bottom:25px;}
+.sub_wrap.order_finish_wrap .order_info_wrap .order_info_box .order_sum {border:none;line-height:1.4;padding:0;}
+.sub_wrap.order_finish_wrap .order_info_wrap .order_info_box .order_sum span {display:block;}
+.sub_wrap.order_finish_wrap .box_area02 > a {    pointer-events: initial;}
+.sub_wrap.order_finish_wrap .box_wrap .more, .sub_wrap.order_wrap .ads_wrap .more {display:none;}
+.sub_wrap.order_finish_wrap .box_area02 .goods_info .data {display:none;}
+.sub_wrap.order_finish_wrap .box_area02 .text_box .link  {display:none;}
+.sub_wrap.order_finish_wrap  .table_wrap_dl .row-2.m_border dl.link {display:block;}
+.sub_wrap.order_wrap .box_wrap.pos_top {background-color:#fff;}
+.sub_wrap.order_wrap .box_wrap {padding-top:25px;background-color:#f4f4f4;}
+.sub_wrap.order_finish_wrap .left_cnt {float:none;}
+.sub_wrap.order_finish_wrap .right_cnt  {display:block;float:none;width:100%;;box-sizing:border-box;}
+.sub_wrap.order_finish_wrap .right_cnt .payment_wrap .num_wrap {background-color:#fff;border:none;padding:20px;}
+.sub_wrap.order_finish_wrap .right_cnt  .payment_wrap .total_num {border-color:#222;border-left:none;border-right:none;}
+.sub_wrap.order_finish_wrap .box_wrap .box_area02 {padding-bottom:20px;}
+.sub_wrap.order_finish_wrap .box_wrap.pos_top  .box_area02 {padding-bottom:0;}
+.sub_wrap.order_finish_wrap .box_wrap .table_wrap_dl {margin-top:0;}
+.sub_wrap.order_finish_wrap .box_wrap.pos_top .table_wrap_dl {padding-top:10px;border-top:1px solid #e3e3e3;}
+.sub_wrap.order_finish_wrap .payment_wrap .num_wrap .num_list {margin-bottom:0;}
+.sub_wrap.order_finish_wrap .payment_wrap .num_wrap .num_list dt {font-size:16px;font-weight:300;}
+.sub_wrap.order_finish_wrap .payment_wrap .num_wrap .num_list dd {font-size:17px;}
+.sub_wrap.order_finish_wrap .payment_wrap .total_num dt {font-size:16px;font-weight:300;}
+.sub_wrap.order_finish_wrap .payment_wrap .total_num dd  {font-size:19px;}
+.sub_wrap.order_finish_wrap .payment_wrap .info_result {text-align:center;}
+.sub_wrap.order_finish_wrap .payment_wrap .info_result .btn.btn_home {width:155px;height:42px;line-height:42px;font-size:15px;border-radius:2.5px;}
+.sub_wrap.order_finish_wrap .right_cnt .pconly {display:none!important;}
+}
