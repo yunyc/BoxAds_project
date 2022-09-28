@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.common.mapper.SerialMapper">
+
+	<select id="selectSerialNumber" parameterType="String" resultType="map">
+		SELECT date
+		      ,serial_number serialNumber
+		  FROM serial_number 
+		  WHERE date = DATE_FORMAT(NOW(), '%Y%m') AND type = #{_parameter}
+	</select>
+
+	<insert id="insertSerialNumber" parameterType="String">
+		INSERT INTO serial_number (date, serial_number, TYPE)
+		     VALUES (DATE_FORMAT(NOW(), '%Y%m'), 1 ,#{_parameter})
+	</insert>
+	
+	<update id="updateSerialNumber" parameterType="string">
+		UPDATE serial_number
+		   SET serial_number = serial_number + 1
+		 WHERE date = DATE_FORMAT(NOW(), '%Y%m') AND type = #{value}
+	</update>
+	
+	<update id="updateSerialNumberForList" parameterType="hashMap">
+		UPDATE serial_number
+		   SET serial_number = serial_number + #{num}
+		 WHERE date = DATE_FORMAT(NOW(), '%Y%m') AND type = #{type}
+	</update>
+
+</mapper>
+

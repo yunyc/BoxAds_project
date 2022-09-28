@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.ad.mapper.AdMapper">
+
+	<sql id="where">
+		<where>
+			<if test="idx != null and idx != 0">
+				AND A.idx = #{idx}
+			</if>
+			<if test="writer != null and writer != ''">
+				AND A.writer = #{writer}
+			</if>
+			<if test="title != null and title != ''">
+				AND A.title LIKE CONCAT('%', #{title}, '%')
+			</if>
+			<if test="state != null and state != ''">
+				AND A.state = #{state}				
+				<if test='state == "Y"'>
+					AND CURDATE() BETWEEN A.view_start_date AND A.view_end_date
+				</if>
+			</if>
+			<if test="startDate != null and startDate != ''">
+				AND DATE(A.insert_date) between #{startDate} AND #{endDate} 
+			</if>
+			<if test="cCIdx != null and cCIdx != ''">
+				And FIND_IN_SET(#{cCIdx}, A.c_c_idx)
+			</if>
+			<if test='favFlag == "Y"'>
+				AND W.fav_idx IS NOT null
+			</if>
+			<if test='searchKeyword != null and searchKeyword != ""'>
+				AND (A.title LIKE CONCAT('%', #{searchKeyword}, '%') 
+				OR A.intro LIKE CONCAT('%', #{searchKeyword}, '%')
+				OR M.name LIKE CONCAT('%', #{searchKeyword}, '%')
+				OR P1.name LIKE CONCAT('%', #{searchKeyword}, '%')
+				OR C.name LIKE CONCAT('%', #{searchKeyword}, '%'))
+			</if>			
+		</where>
+	</sql>
+
+	<select id="selectAdList" parameterType="AdVO" resultType="AdVO">
+		SELECT A.idx
+			      ,A.state
+			      ,A.title
+			      ,A.content
+			      ,A.writer
+			      ,A.p_c_Idx 
+			      ,A.c_c_Idx 
+			      ,A.ctm_age 
+			      ,A.ctm_gender 
+			      ,A.ctm_type 
+			      ,A.url
+			      ,A.intro
+			      ,A.ad_code
+			      ,A.view_cnt 
+			      ,A.insert_date 
+			      ,DATE_FORMAT(A.ad_start_date, '%Y.%m.%d') adStartDate
+				  ,DATE_FORMAT(A.ad_end_date, '%Y.%m.%d') adEndDate
+			      ,DATE_FORMAT(A.view_start_date, '%Y-%m-%d') viewStartDate
+			      ,DATE_FORMAT(A.view_end_date, '%Y-%m-%d') viewEndDate
+			      ,M.name
+			      ,M.site_url AS siteUrl
+			      ,M.intro memIntro
+			      ,GROUP_CONCAT(DISTINCT C1.name) fir
+			      ,P1.name secPro
+			      ,P2.name thrPro
+			      ,PF.url profile
+				  ,RF.url fileName
+				  ,ifnull(W2.favCnt, 0) AS favCnt
+				  ,count(O.a_idx) odCnt
+					<if test="mIdx != null and mIdx != 0">
+						,if(#{mIdx} = W.m_idx, 'Y', 'N') AS favFlag
+					</if>		    
+			      FROM ad_product A
+				LEFT JOIN member M
+						ON M.idx = A.writer
+				LEFT JOIN file F
+						ON F.parent = M.idx
+				LEFT JOIN code_manage C1
+						ON FIND_IN_SET(C1.idx, A.c_c_idx)
+				LEFT JOIN code_manage P2
+						ON A.p_c_idx = P2.idx
+				LEFT JOIN code_manage P1
+						ON P2.parent = P1.idx
+				LEFT JOIN file PF
+						ON PF.parent = M.idx AND PF.type = 'P'
+				LEFT JOIN file RF
+						ON RF.parent = A.idx AND RF.type = 'A'
+				LEFT JOIN
+				    wish_product W ON W.fav_idx = A.idx AND W.type = 'A'
+				LEFT JOIN
+					(SELECT fav_idx, COUNT(fav_idx) AS favCnt
+				    FROM wish_product WHERE type = 'A'
+				    GROUP BY fav_idx) W2 ON W2.fav_idx = A.idx
+				LEFT JOIN order_info O
+						ON O.a_idx = A.idx AND O.state LIKE 'A%'
+		<include refid="where"/>
+		GROUP BY A.idx
+		ORDER BY A.insert_date desc
+		<if test="end != null and end != 0">
+			LIMIT #{start}, #{end}
+		</if>
+		
+	</select>
+	
+	<insert id="insertAdList"  parameterType="AdVO" useGeneratedKeys="true" keyProperty="idx">
+		INSERT INTO ad_product (idx, state, title, content, writer, p_c_idx, c_c_idx, ctm_age, ctm_gender, ctm_type, url, ad_start_date, ad_end_date, view_start_date, view_end_date, intro, ad_code, side)
+		VALUES ((IF(#{idx} != 0, #{idx}, NULL)), #{state}, #{title}, #{content}, #{writer}, #{pCIdx}, #{cCIdx}, #{ctmAge}, #{ctmGender}, #{ctmType}, #{url}, #{adStartDate}, #{adEndDate}, 
+				#{viewStartDate}, #{viewEndDate}, #{intro}, #{adCode}, #{side})
+		
+		ON DUPLICATE KEY UPDATE state = VALUES(state)
+								,title = VALUES(title)
+							   ,content = VALUES(content)
+							   ,writer = VALUES(writer)
+							   ,p_c_idx = VALUES(p_c_idx)
+							   ,c_c_idx = VALUES(c_c_idx)
+							   ,ctm_age = VALUES(ctm_age)
+							   ,ctm_gender = VALUES(ctm_gender)
+							   ,ctm_type = VALUES(ctm_type), url = VALUES(url)
+							   ,ad_start_date = VALUES(ad_start_date)
+							   ,ad_end_date = VALUES(ad_end_date)
+							   ,view_start_date = VALUES(view_start_date)
+							   ,view_end_date = VALUES(view_end_date)
+							   ,intro = VALUES(intro)
+							   ,side = VALUES(side)
+	</insert>
+	
+
+	
+	<select id="selectAdCnt" parameterType="AdVO" resultType="map">
+		SELECT count(distinct A.idx) adCnt
+		  FROM ad_product A
+		LEFT JOIN member M
+		    ON M.idx = A.writer
+		LEFT JOIN code_manage C
+			ON FIND_IN_SET(C.idx, A.c_c_idx)
+		LEFT JOIN code_manage P2
+			ON A.p_c_idx = P2.idx
+		LEFT JOIN code_manage P1
+			ON P2.parent = P1.idx
+		LEFT JOIN file RF
+			ON RF.parent = A.idx AND RF.type = 'A'
+		LEFT JOIN wish_product W
+			ON W.fav_idx = A.idx AND W.type = 'A'
+		  <include refid="where"/>
+	</select>
+	
+	<delete id="deleteAdList" parameterType="AdVO">
+		DELETE FROM ad_product
+		 WHERE idx = #{idx}
+	</delete>
+	
+		
+	<select id="selectAdListAjax" parameterType="hashMap" resultType="AdVO">
+		SELECT 
+		    A.idx,
+		    A.state,
+		    A.ad_code,
+		    A.title,    
+		    A.writer,
+		    A.view_cnt,
+		    date_format(A.ad_start_date, '%y.%m.%d') AS ad_start_date,
+		    date_format(A.ad_end_date, '%y.%m.%d') AS ad_end_date,  
+		    A.view_start_date,
+		    A.view_end_date,
+		    GROUP_CONCAT(C.name) AS fir,
+		    (SELECT COUNT(*) FROM wish_product WHERE fav_idx = A.idx AND type = 'A') AS favCnt,
+		    M.name,
+		    PF.url AS profile,
+		    REP.url AS fileName,
+		    P2.name AS thrPro,
+	   		P1.name AS secPro
+	   		<if test="mIdx != null">
+		    ,
+		    if(W.idx is not null, 'Y', 'N') AS favFlag		    
+		    </if>
+		FROM
+		    ad_product A
+		        LEFT JOIN
+		    member M ON A.writer = M.idx
+		        LEFT JOIN
+		    file PF ON PF.parent = M.idx AND PF.type = 'P'
+		        LEFT JOIN
+		    file REP ON REP.parent = A.idx AND REP.type = 'A'
+			    LEFT JOIN
+			code_manage C ON FIND_IN_SET(C.idx, A.c_c_idx)			   	
+				LEFT JOIN 
+			code_manage P2 ON A.p_c_idx = P2.idx AND P2.type = 'P'
+				LEFT JOIN
+			code_manage P1 ON P2.parent = P1.idx
+			<if test="mIdx != null">
+				    LEFT JOIN
+		    	wish_product W ON W.fav_idx = A.idx AND W.type = 'A' AND W.m_idx = #{mIdx}		    
+		    </if>
+		<include refid="where"/>
+		GROUP BY A.idx
+		ORDER BY 
+			<choose>
+				<when test='order == "N"'>
+					A.insert_date desc
+				</when>
+				<when test='order == "V"'>
+					A.view_cnt desc
+				</when>
+				<when test='order == "F"'>
+					favCnt desc
+				</when>
+				<otherwise>
+					A.insert_date desc
+				</otherwise>
+			</choose>
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selecAdDetail" parameterType="AdVO" resultType="AdVO">
+		SELECT 
+		    A.idx,
+		    A.state,
+		    A.ad_code,
+		    A.title,    
+		    A.writer,
+		    A.view_cnt,
+		    A.ctm_age,
+		    A.ctm_gender,
+		    A.ctm_type,
+		    date_format(A.ad_start_date, '%y.%m.%d') AS ad_start_date,
+		    date_format(A.ad_end_date, '%y.%m.%d') AS ad_end_date,  
+		    A.view_start_date,
+		    A.view_end_date,
+		    GROUP_CONCAT(C.name) AS fir,
+		    (SELECT COUNT(*) FROM wish_product WHERE fav_idx = A.idx AND type = 'A') AS favCnt,
+		    M.name,
+		    PF.url AS profile,
+		    REP.url AS fileName,
+		    C2.name AS thrPro,
+	   		C3.name AS secPro
+	   		<if test="writer != null">
+		    ,
+		    if(W.idx is not null, 'Y', 'N') AS favFlag		    
+		    </if>
+		FROM
+		    ad_product A
+		        LEFT JOIN
+		    member M ON A.writer = M.idx
+		        LEFT JOIN
+		    file PF ON PF.parent = M.idx AND PF.type = 'P'
+		        LEFT JOIN
+		    file REP ON REP.parent = A.idx AND REP.type = 'A'
+			    LEFT JOIN
+			code_manage C ON FIND_IN_SET(C.idx, A.c_c_idx)
+			   	LEFT JOIN
+			code_manage C2 ON C2.idx = A.p_c_idx AND C2.type = 'P'
+				LEFT JOIN
+			code_manage C3 ON C3.idx = C2.parent AND C3.type = 'P'
+			<if test="writer != null">
+				    LEFT JOIN
+		    	wish_product W ON W.fav_idx = A.idx AND W.type = 'A' AND W.m_idx = #{writer}		    
+		    </if>
+		<include refid="where"/>
+		GROUP BY A.idx
+	</select>
+
+</mapper>
+

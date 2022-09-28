@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.schedule.mapper.ScheduleMapper">
+
+<sql id="odWhere">
+	<where>
+		<if test="state != null and state != ''">
+		    AND O.state = #{state}
+		</if>
+		<if test="insertDate != null and insertDate == 'prev'">
+		    AND DATE_FORMAT(O.insert_date, '%Y-%m') = DATE_FORMAT(DATE_ADD(NOW(), INTERVAL - 1 MONTH), '%Y-%m')
+		</if>
+		<if test="insertDate != null and insertDate == 'now'">
+		    AND DATE_FORMAT(O.insert_date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
+		</if>
+	</where>
+</sql>
+
+<sql id="where">
+	<where>
+		<if test="state != null and state != ''">
+		    AND state = #{state}
+		</if>
+		<if test="insertDate != null and insertDate == 'prev'">
+		    AND DATE_FORMAT(insert_date, '%Y-%m') = DATE_FORMAT(DATE_ADD(NOW(), INTERVAL - 1 MONTH), '%Y-%m')
+		</if>
+		<if test="insertDate != null and insertDate == 'now'">
+		    AND DATE_FORMAT(insert_date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')
+		</if>
+	</where>
+</sql>
+
+	<select id="selectOrderInfoForSchedule" parameterType="OrderVO" resultType="OrderVO">
+		SELECT 
+		    O.idx,
+		    O.state    
+		FROM
+		    order_info O
+		    <choose>
+		    	<when test="temp == null">
+					<include refid="odWhere"/>
+		    	</when>
+		    	<when test="temp != null and state == 'boxEnd'  ">
+			    	JOIN
+					    box_product B ON B.idx = O.b_idx AND B.state = 'E'
+			    	WHERE
+			        	DATE(DATE_ADD(B.sell_date, INTERVAL 1 MONTH)) = CURDATE()
+			        	AND O.state LIKE #{temp}
+		    	</when>	
+		    	<when test="temp != null and state == 'adEnd'">
+			    	JOIN
+					    ad_product A ON A.idx = O.a_idx AND A.state = 'E'
+					WHERE
+					    DATE(A.ad_end_date) = CURDATE()
+			        	AND O.state LIKE #{temp}
+		    	</when>
+		    	
+		    </choose>
+	</select>
+	
+	<insert id="insertScheduleLog" parameterType="hashMap">
+		INSERT INTO process_log (o_idx, type, content, action_flag, mesg, reciver, delivery, action)
+		VALUES
+		<foreach collection="list" item="item" separator=",">
+			(#{item.oIdx}, #{item.type}, #{item.content}, #{item.actionFlag}, #{item.mesg}, #{item.reciver}, #{item.delivery}, #{item.action})
+		</foreach>
+	</insert>
+	
+	<select id="selectScheduleLogImgChk" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    COUNT(F.idx) AS chk, GROUP_CONCAT(O.idx) AS oIdxArr
+		FROM
+		    order_info O
+		        JOIN
+		    process_log P ON P.o_idx = O.idx
+		        LEFT JOIN
+		    file F ON F.parent = P.idx AND F.type = #{type}		
+		    <include refid="odWhere"/>
+		GROUP BY P.idx
+		LIMIT 1
+	</select>
+	
+	<update id="updateOrderStateAtScheduler" parameterType="list">
+		<foreach collection="list" item="item" separator=";">
+			UPDATE order_info 
+			SET 
+			<choose>
+				<when test='item.state.substring(0, 1) == "A"'>
+					state = #{item.state}, update_date = NOW()
+				</when>
+				<when test='item.state.substring(0, 1) == "B"'>
+					state = #{item.state}, update_date = NOW()
+				</when>
+			</choose>
+			WHERE idx = #{item.idx}
+		</foreach>
+	</update>
+	
+	<insert id="insertCalCulList" parameterType="list">
+		<foreach collection="list" item="item" separator=";">
+			INSERT INTO calcul_manage (o_idx, cc_code, amount)
+		    SELECT O.idx, #{item.code}, (O.pdt_unit * O.box_cnt) - TRUNCATE((O.pdt_unit * O.box_cnt) * (F.per / 100), 0) AS income
+			FROM order_info O
+		        LEFT JOIN
+		    fees_manage F ON F.category = 'A'
+			WHERE
+		    	O.state = 'B6' AND O.idx = #{item.oIdx}
+		</foreach>
+	</insert>
+	
+</mapper>
+

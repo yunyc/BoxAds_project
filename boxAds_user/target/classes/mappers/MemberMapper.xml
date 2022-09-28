@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.main.mapper.MemberMapper">
+
+	<update id="updateLoginCnt" parameterType="memberVO">
+		UPDATE member 
+			SET 
+			    login_cnt = login_cnt + 1,
+			    login_date = now()
+			WHERE
+			    idx = #{idx}
+	</update>
+
+	<select id="selectMemberList" parameterType="memberVO" resultType="memberVO">
+		 SELECT name
+		 	   ,idx
+		 	   ,pw
+		 	   ,id
+		 	   ,state
+		 	   ,auth_flag
+		 	   ,authkey
+		 	   ,phone
+		 	   ,address
+		 	   ,company_name
+		 	   ,company_number
+		 	   ,confirm_flag
+		 	   ,confirm_date
+		 	   ,insert_date
+		 	   ,delete_date
+		 	   ,login_date
+		 	   ,login_cnt
+		 	   ,company_type
+		 	   ,sector
+		 	   ,business
+		 	   ,site_url
+		 	   ,intro
+		 	   ,pro_name
+		 	   ,pro_phone
+		 	   ,pro_address
+		 	   ,detail
+		 	   ,pro_detail
+		 	   ,agree
+		FROM member
+		<where>
+			<if test="id != null and id != '' and companyNumber != null and companyNumber != ''">
+				AND id = #{id}
+				AND company_number = #{companyNumber}
+			</if>
+			<if test="id != null and id != '' and companyNumber == null">
+				AND id = #{id} AND pw = #{pw}
+			</if>
+			<if test="authkey != null and authkey != '' and companyNumber == null">
+				AND authkey = #{authkey}
+			</if>
+			<if test="idx != null and idx != 0">
+				AND idx = #{idx}
+			</if>
+			<if test="sessionId != null and sessionId != ''">
+				AND session_id = #{sessionId}
+			</if>
+			<if test="authFlag != null and authFlag != ''">
+				AND auth_flag = #{authFlag}
+			</if>
+		</where>		
+	</select>
+	
+	<select id="idChk" parameterType="memberVO" resultType="int">
+		SELECT COUNT(*) FROM member WHERE id = #{id}	
+	</select>
+	
+	<insert id="insertMemberList" parameterType="memberVO" useGeneratedKeys="true" keyProperty="idx">
+		INSERT INTO member(name, id, pw, phone, address, company_name, company_number, agree, authkey, detail)
+	  				VALUES(#{name}, #{id}, #{pw}, #{phone}, #{address}, #{companyName}, #{companyNumber}, #{agree}, #{authkey}, #{detail})
+	  		<selectKey keyProperty="idx" resultType="int" >
+				SELECT LAST_INSERT_ID()
+			</selectKey> 
+	</insert>
+	
+	
+	<update id="updateMemberList" parameterType="memberVO">
+		UPDATE member
+		<choose>
+			<when test="state != null and state != ''">
+				SET state = #{state}
+				   ,quit_msg = #{quitMsg}
+					<if test='state == "H"'>
+						,delete_date = NOW()
+					</if>
+			</when>
+			<when test="pw != null and pw != ''">
+				SET pw = #{pw}
+			</when>
+			<when test="loginCnt != null and loginCnt != 0">
+				SET login_date = curdate()
+		   	   	   ,login_cnt = #{loginCnt}
+			</when>
+			<otherwise>
+				SET id = #{id}
+				   ,phone = #{phone}
+				   ,address = #{address}
+				   ,company_name = #{companyName}
+				   ,company_number = #{companyNumber}
+				   ,company_type = #{companyType}
+				   ,name = #{name}
+				   ,site_url = #{siteUrl}
+				   ,sector = #{sector}
+				   ,business = #{business}
+				   ,intro = #{intro}
+				   ,pro_name = #{proName}
+				   ,pro_phone = #{proPhone}
+				   ,pro_address = #{proAddress}
+				   ,agree = #{agree}
+				   ,detail = #{detail}
+				   ,pro_detail = #{proDetail}
+				   <if test="confirmFlag != null and confirmFlag != ''">
+						,confirm_flag = #{confirmFlag}
+					</if>
+				   
+			</otherwise>
+		</choose>
+		<where>
+			<choose>
+				<when test="authkey != null and authkey != ''">
+					AND authkey = #{authkey}
+				</when>
+				<when test="idx != null and idx != 0">
+					AND idx = #{idx}
+				</when>
+			</choose>
+		</where>
+	</update>
+	
+	<delete id="deleteMemberList">
+		DELETE FROM member
+		 WHERE idx = #{idx}
+		 <if test="fileType != null and fileType != ''">
+		 	AND file_type = #{fileType}
+		 </if>
+	</delete>
+	
+	<update id="updateAuthConfirm" parameterType="memberVO">
+		UPDATE member
+		SET auth_flag = 'Y'
+		WHERE idx = #{idx} 
+		AND authkey = #{authkey} AND auth_flag = 'N'
+	</update>
+	
+	<update id="updateSessionId" parameterType="memberVO">
+		UPDATE member 
+		   SET session_id = #{sessionId}
+		 WHERE id = #{id} AND pw = #{pw}
+	</update>
+	
+	<select id="selectCash" parameterType="int" resultType="int">
+		SELECT 
+		    own_cash - withdraw_cash
+		FROM
+		    member
+		WHERE
+		    idx = #{value} 
+	</select>
+	
+	<select id="selectCashAndEsti" parameterType="int" resultType="hashMap">
+		SELECT 
+		    (own_cash - withdraw_cash) AS cash,		    
+		    esti_income AS income,
+		    esti_outcome AS outcome
+		FROM
+		    member
+		WHERE
+		    idx = #{value} 
+	</select>
+	
+	<select id="selectPrImg" parameterType="int" resultType="hashMap">
+		SELECT 
+		    idx, real_name, url
+		FROM
+		    file
+		WHERE
+		    parent = #{value} AND type = 'P'
+	</select>
+	
+	<select id="selectChkQuit" parameterType="int" resultType="int">
+		SELECT 
+		    COUNT(DISTINCT A.idx) + COUNT(DISTINCT B.idx) + COUNT(DISTINCT O.idx) AS chk
+		FROM
+		    member M
+		        LEFT JOIN
+		    ad_product A ON A.writer = M.idx AND A.state = 'Y'
+		        LEFT JOIN
+		    box_product B ON B.writer = M.idx AND B.state = 'Y'
+		        LEFT JOIN
+		    order_info O ON O.state IN ('B1', 'B2', 'B3', 'B4', 'B5') AND (O.a_idx = A.idx OR O.b_idx = B.idx)
+		WHERE
+		    M.idx = #{mIdx}
+	</select>
+	
+</mapper>
+

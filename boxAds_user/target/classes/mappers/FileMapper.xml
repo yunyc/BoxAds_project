@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.main.mapper.FileMapper">
+	<select id="selectFileList" parameterType="FileVO" resultType="FileVO">
+		SELECT real_name
+		      ,idx
+		      ,parent
+		      ,url
+		      ,file_type
+		      ,type
+		  FROM file
+		 <where>
+		 	<choose>
+		 		<when test="parent != null and parent != 0">
+		 		AND parent = #{parent}
+			 	</when>
+			 	<when test="idx != null and idx != 0">
+			 		AND idx = #{idx}
+			 	</when>
+		 	</choose>
+		 	
+		 	<choose>
+		 		<when test='type == "E"'>
+			 		AND (type = 'E' OR type = 'I')
+				 </when>
+				 <when test='type == "A"'>
+			 		AND (type = 'A' OR type = 'D')
+				 </when>
+				 <when test="type != null and type != ''">
+			 		AND type = #{type}
+			 	</when>
+		 	</choose>
+		 </where>
+	</select>
+	
+	<insert id="insertFileList" useGeneratedKeys="true" keyProperty="idx" parameterType="FileVO">
+		INSERT INTO file(parent, type, real_name, size, file_type, url)
+			VALUES(#{parent}, #{type}, #{realName}, #{size}, #{fileType}, #{url})
+	</insert>
+	
+	<insert id="insertFile" useGeneratedKeys="true" keyProperty="idx" parameterType="java.util.List">
+		INSERT INTO file(idx, parent, type, real_name, size, file_type, url)
+			VALUES
+		<foreach collection="fileList" item="item" separator=" , ">
+            ((IF(#{item.idx} != 0, #{item.idx}, NULL)), #{item.parent}, #{item.type}, #{item.realName}, #{item.size}, #{item.fileType}, #{item.url})
+        </foreach>
+        ON DUPLICATE KEY UPDATE real_name = VALUES(real_name), file_type = VALUES(file_type), size = VALUES(size), url = VALUES(url)
+	</insert>
+	
+	<update id="updateFileList" parameterType="FileVO">
+		UPDATE file
+		SET real_name = #{realName}
+		   ,url = #{url}
+		   ,size = #{size}
+		   ,insert_date = curdate()
+		   WHERE idx = #{idx}
+	</update>
+	
+	<delete id="deleteFileList" parameterType="FileVO">
+		DELETE FROM file
+		<where>
+			<choose>
+				<when test="parent != null and parent != 0">
+		 		AND parent = #{parent}
+			 	</when>
+			 	<when test="idx != null and idx != 0">
+			 		AND idx = #{idx}
+			 	</when>
+			</choose>
+			
+		 	<if test="type != null and type != ''">
+		 		AND type = #{type}
+		 	</if>
+		</where>
+		 
+	</delete>
+	
+	<select id="selectQnaFileList" parameterType="FileVO" resultType="map">
+		SELECT F.real_name realName
+			  ,F.idx
+			  ,IFNULL(F.parent, 0) parent
+		  FROM (SELECT qna.idx
+					  ,qna.title
+					  ,qna.parent
+					  ,qna.content
+					  ,qna.insert_date
+					  ,ad.name
+				 FROM board_qna qna
+			LEFT JOIN admin ad
+				   ON qna.writer = ad.idx) A
+	 LEFT JOIN file F
+			ON F.parent = A.idx AND type = 'R'
+			<where>
+				<if test="idx != null and idx != 0">
+			       	A.parent = #{idx}
+			   	</if>
+			</where>	 
+	</select>
+	
+	<update id="updateBoxState" parameterType="FileVO">
+		UPDATE file
+		   SET type = CASE WHEN idx = #{idx} THEN 'E' 
+               			   ELSE 'I' END
+		 WHERE parent = #{parent}
+	</update>
+	
+	<update id="updateAdState" parameterType="FileVO">
+		UPDATE file
+		   SET type = CASE WHEN idx = #{idx} THEN 'A' 
+               			   ELSE 'D' END
+		 WHERE parent = #{parent}
+	</update>
+	
+	<delete id="delete" parameterType="map">
+		DELETE FROM file
+			WHERE idx IN <foreach collection="deleteIdx" item="id" open="(" separator="," close=")">#{id}</foreach>
+	</delete>
+	
+	<insert id="copyFile" parameterType="map">
+		INSERT INTO file(parent, type, real_name, size, file_type, url)
+			SELECT #{parent}
+			      ,case when idx = #{repIdx} then #{repType} ELSE #{imgType} END type
+			      ,real_name
+			      ,size
+			      ,file_type 
+			      ,url
+			   FROM file
+			   WHERE idx IN <foreach collection="fileIdx" item="idx" open="(" separator="," close=")">#{idx}</foreach>
+	</insert>
+</mapper>

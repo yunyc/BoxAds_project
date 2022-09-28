@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.main.mapper.CommonMapper">
+	
+	<update id="updateViewCnt" parameterType="map">
+		UPDATE ${table} 
+		SET view_cnt = view_cnt + 1
+		WHERE idx = #{idx}
+	</update>
+	
+	<insert id="insertReason" parameterType="map">
+		INSERT INTO reason (parent, state, content, type)
+					VALUES (#{parent}, #{state}, #{content}, #{type})
+	</insert>
+	
+	<select id="selectReason" parameterType="map" resultType="map">
+		SELECT idx
+		      ,parent
+		      ,state
+		      ,content
+		      ,type
+		      ,DATE_FORMAT(insert_date, '%Y.%m.%d %H:%i:%s') insertDate
+		 FROM reason
+		 WHERE parent = #{parent} AND type = #{type}
+		 ORDER BY insert_date desc
+	</select>
+	
+	<select id="selectTest" parameterType="map" resultType="map">
+		SELECT one
+		 FROM test
+	</select>
+	
+	<insert id="insertWish" parameterType="hashMap">
+		INSERT INTO wish_product (fav_idx, m_idx, type)
+		VALUES (#{favIdx}, #{mIdx}, #{type})
+	</insert>
+
+	<delete id="deleteWish" parameterType="hashMap">
+		DELETE FROM wish_product 
+		WHERE
+		    fav_idx = #{favIdx} AND m_idx = #{mIdx} AND type = #{type}
+	</delete>
+		
+	<select id="mainDashCnt" resultType="hashMap">
+		SELECT 
+		    (SELECT format(COUNT(*), 0) FROM box_product) AS boxCnt,
+		    (SELECT format(COUNT(*), 0) FROM ad_product) AS adCnt,
+		    (SELECT format(COUNT(*), 0) FROM order_info) AS orderCnt,
+		    (SELECT format(COUNT(*), 0) FROM member) AS memberCnt				
+	</select>
+	
+	<select id="selectQRcode" parameterType="map" resultType="map">
+		SELECT idx
+			  ,parent
+		      ,site_url siteUrl
+		      ,url url
+		  FROM qrcode
+		  <where>
+		  	<choose>
+		 		<when test="qIdx != null and qIdx != 0">
+		 			AND idx = #{qIdx}
+		 		</when>
+		 		<otherwise>
+		 			AND parent = #{parent}
+		 		</otherwise>
+		 	</choose>
+		  </where>
+		 
+	</select>
+	
+	<insert id="insertQRcode" parameterType="map" useGeneratedKeys="true" keyProperty="idx">
+		INSERT INTO qrcode(idx, parent, site_url, url)
+				    VALUES(#{qIdx}, #{parent}, #{siteUrl}, #{url})
+		ON DUPLICATE KEY UPDATE site_url = VALUES(site_url)
+		
+	</insert>
+	
+	<update id="updateCnt" parameterType="map">
+		UPDATE qrcode
+		SET count = count + 1
+		WHERE idx = #{idx}
+	</update>
+	
+	<select id="selectBannerAndAlarm" parameterType="String" resultType="map">
+		SELECT DISTINCT B.idx
+			  ,B.state
+			  ,B.title
+		      ,B.start_date
+		      ,B.end_date
+		      ,B.window
+		      ,B.url siteUrl
+		      ,F.type
+		      ,F.real_name realName
+		      ,F.url
+		      ,CONCAT(date_format(B.insert_date, '%y.%m.%d'), '('
+		      		  ,(case when DAYOFWEEK(B.insert_date) = 1 then '일'
+					         when DAYOFWEEK(B.insert_date) = 2 then '월'
+					         when DAYOFWEEK(B.insert_date) = 3 then '화'
+					         when DAYOFWEEK(B.insert_date) = 4 then '수'
+					         when DAYOFWEEK(B.insert_date) = 5 then '목'
+					         when DAYOFWEEK(B.insert_date) = 6 then '금'
+							 when DAYOFWEEK(B.insert_date) = 7 then '토' END), ')') insertDate
+		FROM banner B
+		LEFT JOIN file F
+		ON F.parent = B.idx
+		<if test='_parameter == "A"'>
+			AND F.type = null
+		</if>
+		WHERE NOW() BETWEEN B.start_date AND B.end_date AND B.state = 'Y'
+		<if test='_parameter == "B"'>
+			AND (F.type = 'B' OR F.type = 'MB')
+		</if>
+		<if test='_parameter == "A"'>
+			AND B.type = 'A' 
+		</if>
+		ORDER BY B.insert_date desc
+	</select>
+	
+	<select id="selectAlarmLog" parameterType="map" resultType="map">
+		SELECT 
+			A.*, 
+			IF(14 > DATEDIFF(NOW(), A.insert_date), 'Y', 'N') AS newFlag
+		  		<!-- 판매자가 받는 로그 -->
+		  FROM (SELECT L.*,
+		       		   CONCAT(date_format(L.insert_date, '%y.%m.%d'), '('
+		      		  			,(case when DAYOFWEEK(L.insert_date) = 1 then '일'
+								         when DAYOFWEEK(L.insert_date) = 2 then '월'
+								         when DAYOFWEEK(L.insert_date) = 3 then '화'
+								         when DAYOFWEEK(L.insert_date) = 4 then '수'
+								         when DAYOFWEEK(L.insert_date) = 5 then '목'
+								         when DAYOFWEEK(L.insert_date) = 6 then '금'
+										 when DAYOFWEEK(L.insert_date) = 7 then '토' END), ')') insertDate
+		 		 FROM member M
+			LEFT JOIN order_info O
+			   	   ON M.idx = O.m_idx
+			LEFT JOIN process_log L
+				   ON L.o_idx = O.idx
+		 		WHERE L.reciver IN ('T', 'B') AND M.idx = #{mIdx}
+			
+			UNION
+				<!-- 광고주가 받는 로그 -->
+				SELECT L.*,
+				       CONCAT(date_format(L.insert_date, '%y.%m.%d'), '('
+					      		  ,(case when DAYOFWEEK(L.insert_date) = 1 then '일'
+								         when DAYOFWEEK(L.insert_date) = 2 then '월'
+								         when DAYOFWEEK(L.insert_date) = 3 then '화'
+								         when DAYOFWEEK(L.insert_date) = 4 then '수'
+								         when DAYOFWEEK(L.insert_date) = 5 then '목'
+								         when DAYOFWEEK(L.insert_date) = 6 then '금'
+										 when DAYOFWEEK(L.insert_date) = 7 then '토' END), ')') insertDate
+				 FROM ad_product A
+			LEFT JOIN order_info O
+				   ON A.idx = O.a_idx
+			LEFT JOIN process_log L
+					ON L.o_idx = O.idx
+				 WHERE reciver IN ('T', 'A') and A.writer = #{mIdx}) A
+
+		ORDER BY A.insert_date DESC
+	  <if test="end != null and end != 0">
+	  	LIMIT #{end}
+	  </if>
+	</select>
+	
+	<select id="mainDashLoginCnt" parameterType="MemberVO" resultType="hashMap">
+		SELECT t1.*, t2.*, t3.*, t4.*
+		FROM
+		    (SELECT 
+		        COUNT(O.idx) AS bTotal, COUNT(IF(O.state NOT IN ('A3', 'A4', 'B6', 'B7', 'B8'), O.idx, NULL)) AS bIng
+		    FROM
+		        box_product B
+		    JOIN order_info O ON B.idx = O.b_idx
+		    WHERE B.writer = #{idx} AND O.state LIKE 'B%') AS t1
+		        LEFT JOIN
+		    (SELECT 
+		        COUNT(O.idx) AS aTotal, COUNT(IF(O.state NOT IN ('A3', 'A4', 'B6', 'B7', 'B8'), O.idx, NULL)) AS aIng
+		    FROM
+		        ad_product A
+		    JOIN order_info O ON A.idx = O.a_idx
+		    WHERE A.writer = #{idx} AND O.state LIKE 'A%') AS t2 ON 1 = 1
+		        LEFT JOIN
+		    (SELECT COUNT(O.idx) AS bmTotal, COUNT(IF(O.state NOT IN ('A3', 'A4', 'B6', 'B7', 'B8'), O.idx, NULL)) AS bmIng
+		    FROM
+		        order_info O
+		    WHERE
+		        O.m_idx = #{idx} AND O.state LIKE 'B%') AS t3 ON 1 = 1
+		        LEFT JOIN
+		    (SELECT 
+		        COUNT(O.idx) AS amTotal, COUNT(IF(O.state NOT IN ('A3', 'A4', 'B6', 'B7', 'B8'), O.idx, NULL)) AS amIng
+		    FROM
+		        order_info O
+		    WHERE
+		        O.m_idx = #{idx} AND O.state LIKE 'A%') AS t4 ON 1 = 1
+
+	</select>
+	
+</mapper>
+
