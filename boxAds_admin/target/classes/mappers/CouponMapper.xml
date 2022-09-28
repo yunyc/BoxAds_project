@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.coupon.mapper.CouponMapper">
+
+	<sql id="where">
+		<where>
+			<if test='title != null and title != ""'>
+				AND title like CONCAT('%', #{title},'%')
+			</if>
+			<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+				AND DATE(insert_date) between #{startDate} AND #{endDate}
+			</if>
+			<if test="idx != null and idx != 0">
+		 	 	AND idx = #{idx}
+		 	 </if>
+		</where>
+	</sql>
+	
+	<select id="selectCouponList" parameterType="CouponVO" resultType="CouponVO">
+		SELECT 
+		    idx,
+		    target,
+		    title,
+		    mesg,
+		    content,
+		    writer,
+		    state,
+		    <!-- FORMAT(price, 0) AS price, -->
+		    price,
+		    use_flag,
+		    period_flag,
+		    <!-- FORMAT(total_cnt, 0) AS total_cnt, -->
+		    total_cnt,
+		    issue_cnt,
+		    start_date,
+		    end_date,
+		    able_start_date,
+		    able_end_date,
+		    insert_date,
+		    update_date
+		FROM coupon_manage
+		<include refid="where"/>
+		ORDER BY idx desc
+		LIMIT #{start}, #{end}	
+	</select>
+	
+	<select id="selectCouponListCnt" parameterType="CouponVO" resultType="int">
+		SELECT COUNT(idx) cnt
+		FROM coupon_manage
+		<include refid="where"/>
+	</select>
+	
+	<insert id="insertCouponList" parameterType="CouponVO">
+		INSERT INTO coupon_manage(idx, target, title, mesg, content, state, writer, price, use_flag, period_flag, total_cnt, start_date, end_date, able_start_date, able_end_date, insert_date)
+        VALUES(if(#{idx} != 0, #{idx}, NULL), #{target}, #{title}, #{mesg}, #{content}, #{state}, #{writer}, #{price}, #{useFlag}, #{periodFlag}, #{totalCnt}, #{startDate}, #{endDate}, #{ableStartDate}, #{ableEndDate}, NOW())
+        ON DUPLICATE KEY UPDATE 
+        	target = value(target), title = value(title), mesg = value(mesg), content = value(content), state = value(state), writer = value(writer), price = value(price), use_flag = value(use_flag), period_flag = value(period_flag), 
+        	total_cnt = value(total_cnt), start_date = value(start_date), end_date = value(end_date), able_start_date = value(able_start_date), able_end_date = value(able_end_date), update_date = value(insert_date)
+	</insert>
+	
+	<update id="updateCouponState" parameterType="CouponVO">
+		UPDATE coupon_manage 
+		SET 
+		    state = #{state},
+		    use_flag = #{useFlag},
+		    update_date = NOW()
+		WHERE
+		    idx = #{idx} 
+	</update>
+	
+	<select id="selectCouponIssue" parameterType="map" resultType="map">
+		SELECT C.idx
+		      ,C.title
+		      ,C.mesg
+		      ,C.start_date startDate
+		      ,C.end_date endDate
+		      ,FORMAT(price, 0) price
+		      ,I.use_date useDate
+		  FROM coupon_manage C
+		LEFT JOIN coupon_issue I
+			ON C.idx = I.c_idx
+		<where>
+			<if test="mIdx != null and mIdx != 0">
+				AND m_idx = #{mIdx}
+			</if>
+		</where>
+		<if test="end != null and end != 0">
+            LIMIT #{start}, #{end}
+        </if>
+	</select>
+	
+	<select id="selectCouponIssueCnt" parameterType="map" resultType="map">
+		SELECT count(idx) issueCnt
+		  FROM coupon_issue
+		  <where>
+			<if test="mIdx != null and mIdx != 0">
+				AND m_idx = #{mIdx}
+			</if>
+		</where>
+	</select>
+		
+	
+</mapper>
+

@@ -1,0 +1,366 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.calcul.mapper.CalculMapper">
+
+	<sql id="where">
+		<if test='state != null and state.length != 0'>
+			AND CC.state IN(<foreach collection="state" item="state" separator=",">#{state}</foreach>)
+		</if>
+		<if test='searchKeyword != null and searchKeyword != ""'>
+			<choose>
+				<when test='searchType == "code"'>
+					AND CC.cc_code LIKE CONCAT('%', #{searchKeyword}, '%')
+				</when>
+				<when test='searchType == "name"'>
+					AND AM.name LIKE CONCAT('%', #{searchKeyword}, '%')	
+				</when>
+				<when test='searchType == "id"'>
+					AND AM.id LIKE CONCAT('%', #{searchKeyword}, '%')	
+				</when>				
+			</choose>
+		</if>
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+			AND DATE(CC.insert_date) BETWEEN #{startDate} AND #{endDate}
+		</if>		
+		<if test="mIdx != null">
+			AND BM.idx = #{mIdx}
+		</if>
+	</sql>
+
+	<select id="selectCalculList" resultType="hashMap">
+		SELECT 
+		    CC.idx,
+		    CC.o_idx AS oIdx,
+		    CASE WHEN CC.state = 'C' THEN '부분취소'
+				 WHEN CC.state = 'N' THEN '요청'
+				 WHEN CC.state = 'H' THEN '보류'
+				 WHEN CC.state = 'Y' THEN '처리' END AS stateStr,
+			CC.state,
+		    CC.cc_code AS ccCode,
+		    CC.amount,
+		    DATE_FORMAT(CC.insert_date, '%y.%m.%d %H:%m:%s') AS insertDate,
+		    DATE_FORMAT(CC.update_date, '%y.%m.%d %H:%m:%s') AS updateDate,
+		    IFNULL((SELECT price FROM coupon_manage M JOIN coupon_issue I ON M.idx = I.c_idx WHERE I.idx = O.c_idx), 0) AS cpPrice,    
+		    (TRUNCATE((IF(A.side = 'O', U.one_side, U.two_side) * O.box_cnt) * (F2.per / 100), 0) 
+				+ TRUNCATE((O.pdt_unit * O.box_cnt) * (F1.per / 100), 0)) 
+		        - IFNULL((SELECT price FROM coupon_manage M JOIN coupon_issue I ON M.idx = I.c_idx WHERE I.idx = O.c_idx), 0)  AS margin,
+		    O.total_price AS totalPrice,
+		    
+		    <if test="mIdx != null">
+		    	TRUNCATE((IF(A.side = 'O', U.one_side, U.two_side) * O.box_cnt), 0) AS prPrice,
+			    TRUNCATE((O.pdt_unit * O.box_cnt) * (F1.per / 100), 0) AS adFee,
+			    A.title AS aTitle,
+			    B.title AS bTitle,
+			    B.sell_date AS sellDate,
+			    B.box_cnt AS boxCnt,
+		    </if>
+		    
+		    AM.idx AS amIdx,
+		    BM.idx AS bmIdx,
+		    AM.name AS aName,
+		    BM.name AS bName
+		FROM
+		    calcul_manage CC
+		        JOIN
+		    order_info O ON O.idx = CC.o_idx AND O.state = 'B6'
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    unit_manage U ON U.c_idx = A.p_c_idx AND O.box_cnt BETWEEN `min` AND `max`
+		        JOIN
+		    member AM ON AM.idx = A.writer
+		        JOIN
+		    member BM ON BM.idx = B.writer
+		        LEFT JOIN
+		    fees_manage F1 ON F1.category = 'A'
+		        LEFT JOIN
+		    fees_manage F2 ON F2.category = 'P'
+		    <where>
+		    	<include refid="where"/>
+		    </where>
+		    ORDER BY CC.insert_date DESC
+		    <if test="excel != 'EXCEL' and end != 0">
+				LIMIT #{start}, #{end}		
+			</if>
+	</select>
+		
+	<select id="selectCalculListCnt" resultType="int" parameterType="hashMap">		
+		SELECT 
+		    COUNT(CC.idx) AS cnt
+		FROM
+		    calcul_manage CC
+		        JOIN
+		    order_info O ON O.idx = CC.o_idx AND O.state = 'B6'
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    member AM ON AM.idx = A.writer
+		        JOIN
+		    member BM ON BM.idx = B.writer
+			<where>
+		    	<include refid="where"/>
+		    </where>
+	</select>
+	
+	<select id="selectCalculInfo" parameterType="list" resultType="hashMap">
+		SELECT 
+		    CC.*, 
+		    O.pdt_unit * O.box_cnt AS adPrice,
+		    O.total_price AS totalPrice,
+		    B.writer AS bmIdx, 
+		    A.writer AS amIdx
+		FROM
+		    calcul_manage CC
+		        JOIN
+		    order_info O ON O.idx = CC.o_idx AND O.state = 'B6'
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+			    JOIN
+	    	ad_product A ON O.a_idx = A.idx
+    	<where>
+    		CC.idx in (
+			<foreach collection="list" item="item" separator=",">		
+				#{item}
+			</foreach>
+			)
+    	</where>
+	</select>
+	
+	<update id="updateState" parameterType="hashMap">
+		<foreach collection="list" item="item" separator=";">
+			<if test='state != null and state =="C" or state != null and state =="Y"'>
+				<!-- 박스주 예상 수입 수정 -->
+				UPDATE member 
+				SET esti_income = esti_income - #{item.amount}
+				WHERE idx = #{item.bmIdx};
+				
+				<!-- 광고주 예상 지출 수정 -->
+				UPDATE member 
+				SET esti_outcome = esti_outcome - #{item.totalPrice}
+				WHERE idx = #{item.amIdx};
+			</if>		
+			
+			<if test="mesg != null and mesg != ''">
+				INSERT INTO reason (parent, state, content, type)
+				VALUES (#{item.idx}, #{state}, #{mesg}, 'C');
+			</if>		
+					
+			UPDATE calcul_manage 
+			SET state = #{state}, update_date = now()
+			WHERE idx = #{item.idx}						
+		</foreach>
+	</update>
+	
+	<sql id="wWhere">
+		<if test='state != null and state.length != 0'>
+			AND W.state IN(<foreach collection="state" item="state" separator=",">#{state}</foreach>)
+		</if>
+		<if test='searchKeyword != null and searchKeyword != ""'>
+			<choose>
+				<when test='searchType == "name"'>
+					AND M.name LIKE CONCAT('%', #{searchKeyword}, '%')	
+				</when>
+				<when test='searchType == "id"'>
+					AND M.id LIKE CONCAT('%', #{searchKeyword}, '%')	
+				</when>				
+			</choose>
+		</if>
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+			AND DATE(W.insert_date BETWEEN) #{startDate} AND #{endDate}
+		</if>		
+	</sql>
+	
+	<select id="selectWithdrawList" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    M.id,
+		    M.name,
+		    CONCAT(B.bank, ' ', B.acc_number, ' ', B.depositor) AS bank,
+		    W.idx,		    
+		    W.amount,
+		    W.fee,   
+		    W.fee + W.amount AS total, 
+		    DATE_FORMAT(W.insert_date, '%y.%m.%d') AS insertDate,
+		    IFNULL(DATE_FORMAT(W.update_date, '%y.%m.%d'), '-') AS updateDate,
+		    CASE
+		        WHEN W.state = 'N' THEN '신청'
+		        WHEN W.state = 'Y' THEN '처리'
+		        WHEN W.state = 'H' THEN '보류'
+		    END AS state
+		FROM
+		    withdrawal W
+		        JOIN
+		    member M ON M.idx = W.m_idx
+		        JOIN
+		    bank_info B ON B.m_idx = M.idx
+		    <where>
+		    	<include refid="wWhere"/>
+		    </where>
+		ORDER BY W.insert_date DESC
+		<if test="excel != 'EXCEL' and end != 0">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+	
+	<select id="selectWithdrawListCnt" parameterType="hashMap" resultType="int">
+		SELECT 
+		    count(W.idx)
+		FROM
+		    withdrawal W
+		        JOIN
+		    member M ON M.idx = W.m_idx
+		        JOIN
+		    bank_info B ON B.m_idx = M.idx
+		    <where>
+		    	<include refid="wWhere"/>
+		    </where>				
+	</select>
+	
+	<select id="selectWithdraw" parameterType="list" resultType="hashMap">
+		SELECT 
+		    idx, m_idx AS mIdx, amount, fee, state
+		FROM
+		    withdrawal W
+		<where>
+    		idx in (
+			<foreach collection="list" item="item" separator=",">		
+				#{item}
+			</foreach>
+			)
+    	</where>
+	</select>
+	
+	<update id="updateStateWithdraw" parameterType="hashMap">
+		<foreach collection="list" item="item" separator=";">
+			<if test='state != null and state =="Y"'>
+				UPDATE member 
+				SET withdraw_cash = withdraw_cash - (#{item.amount} + #{item.fee})
+				WHERE idx = #{item.mIdx};
+			</if>		
+			
+			<if test="mesg != null and mesg != ''">
+				INSERT INTO reason (parent, state, content, type)
+				VALUES (#{item.idx}, #{state}, #{mesg}, 'O');
+			</if>		
+					
+			UPDATE withdrawal 
+			SET state = #{state}, update_date = now()
+			WHERE idx = #{item.idx}
+		</foreach>
+	</update>
+	
+	<sql id="billWhere">
+		<if test='subject != null and subject.length != 0'>
+			<!-- AND B.subject = #{subject} -->
+			AND B.subject IN(<foreach collection="subject" item="subject" separator=",">#{subject}</foreach>)
+		</if>
+		<if test='state != null and state.length != 0'>
+			<!-- AND B.state = #{state} -->
+			AND B.state IN(<foreach collection="state" item="state" separator=",">#{state}</foreach>)
+		</if>
+		<if test='type != null and type.length != 0'>
+			<!-- AND B.type = #{type} -->
+			AND B.type IN(<foreach collection="type" item="type" separator=",">#{type}</foreach>)
+		</if>		
+		<if test="startDate != null and startDate != '' and endDate != null and endDate != ''">
+			AND DATE(B.insert_date) between #{startDate} AND #{endDate}
+		</if>		
+		<if test="idx != null and idx !=''">
+			AND B.idx = #{idx}
+		</if>
+	</sql>
+	
+	<select id="selectBillList" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    M.name,
+		    M.idx AS mIdx,
+		    B.idx,
+		    CASE
+		        WHEN `subject` = 'A' THEN '매출(충전)'
+		        WHEN `subject` = 'M' THEN '매입(출금)'
+		    END AS `subjectStr`,
+		    `subject`,
+		    CASE
+		        WHEN B.`type` = 'N' THEN '세금계산서'
+		        WHEN B.`type` = 'S' THEN '계산서'
+		        WHEN B.`type` = 'F' THEN '현금영수증'
+		    END AS `typeStr`,
+		    B.`type`,
+		    B.amount,
+		    B.fee,
+		    B.amount + B.fee AS total,
+		    DATE_FORMAT(B.insert_date, '%y.%m.%d') AS insertDate,
+		    IFNULL(DATE_FORMAT(B.update_date, '%y.%m.%d'), '-') AS updateDateStr,
+    		DATE_FORMAT(B.update_date, '%y.%m.%d %H:%i:%s') AS updateDate,
+		    CASE
+		        WHEN B.state = 'Y' THEN '발행완료'
+		        WHEN B.state = 'N' THEN '발행요청'
+		        WHEN B.state = 'R' THEN '수정발행'
+		    END AS stateStr,
+		    B.state
+		FROM
+		    bill_issue B
+		        JOIN
+		    member M ON M.idx = B.m_idx
+		    <where>
+		    	<include refid="billWhere"/>
+		    </where>
+		ORDER BY B.update_date DESC , B.insert_date DESC
+		<if test="excel != 'EXCEL' and end != 0">
+			LIMIT #{start}, #{end}		
+		</if>
+	</select>
+	
+	<select id="selectBillListCnt" parameterType="hashMap" resultType="int">
+		SELECT 
+		    count(B.idx)
+		FROM
+		    bill_issue B
+		        JOIN
+		    member M ON M.idx = B.m_idx
+		    <where>
+		    	<include refid="billWhere"/>	
+		    </where>
+	</select>
+	
+	<select id="selectMemberInfo" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    M.name,
+		    M.company_number AS companyNumber,
+		    CONCAT(M.sector, ' / ', M.business) AS business,
+		    M.company_name AS companyName,
+		    CONCAT(M.address, ' ', M.detail) AS address,
+		    B.phone,
+		    B.email,
+		    M.company_type AS companyType,
+		    F.real_name AS realName,
+		    F.url,
+		    F.idx AS fIdx
+		FROM
+		    member M
+		        JOIN
+		    bill_info B ON B.m_idx = M.idx	
+		        LEFT JOIN
+		    file F ON F.parent = M.idx AND F.type = 'C'
+		    <where>
+		    	M.idx = #{mIdx}
+		    </where>		    
+	</select>
+	
+	<update id="updateBillState" parameterType="hashMap">
+		UPDATE bill_issue 
+		SET 
+		    state = #{state},
+		    update_date = #{date}
+		WHERE
+		    idx = #{idx}
+	</update>
+	
+</mapper>
+

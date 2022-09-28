@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.main.mapper.CommonMapper">
+	
+	<select id="selectQRcode" parameterType="int" resultType="map">
+		SELECT idx
+		      ,parent
+		      ,site_url
+		      ,url
+		      ,count
+		      ,insert_date
+		FROM qrcode
+		WHERE parent = #{value}
+	</select>
+	
+	<select id="mainDashCnt" resultType="hashMap">
+		SELECT 
+			(SELECT COUNT(B.idx) FROM (SELECT o_idx, MAX(insert_date) AS insert_date FROM print_log GROUP BY o_idx) A
+					LEFT JOIN print_log B ON A.o_idx = B.o_idx AND A.insert_date = B.insert_date
+			WHERE B.state = 'B4') AS pCnt,
+			IFNULL((SELECT COUNT(R.idx) FROM order_info O
+		        JOIN (SELECT B.* FROM 
+						(SELECT o_idx, MAX(insert_date) AS insert_date
+						FROM process_log GROUP BY o_idx) A
+				LEFT JOIN process_log B ON A.o_idx = B.o_idx AND A.insert_date = B.insert_date) 
+					AS R ON R.o_idx = O.idx AND O.state = 'B4'
+					JOIN
+				file F ON F.parent = R.idx AND F.type = 'B14'
+			WHERE R.type != 'B15-1'), 0) AS o1Cnt,
+			IFNULL((SELECT COUNT(R.idx) FROM order_info O
+		        JOIN (SELECT B.* FROM 
+						(SELECT o_idx, MAX(insert_date) AS insert_date
+						FROM process_log GROUP BY o_idx) A
+				LEFT JOIN process_log B ON A.o_idx = B.o_idx AND A.insert_date = B.insert_date) 
+					AS R ON R.o_idx = O.idx AND O.state = 'B5'
+					JOIN
+				file F ON F.parent = R.idx AND F.type = 'B19'
+			WHERE R.type != 'B20-1'), 0) AS o2Cnt,
+			(SELECT COUNT(idx) FROM board_qna WHERE reply_flag = 'N') AS bCnt, 
+			(SELECT COUNT(M.idx) FROM member M JOIN file F ON F.parent = M.idx AND F.type = 'C'
+			WHERE M.auth_flag = 'Y' AND M.state = 'Y' AND M.confirm_flag = 'N') AS mCnt,   
+			(SELECT COUNT(idx) FROM calcul_manage WHERE state = 'N') AS cCnt,
+			(SELECT COUNT(idx) FROM withdrawal WHERE state = 'N') AS wCnt,
+			(SELECT COUNT(idx) FROM bill_issue WHERE state = 'N') AS iCnt		
+	</select>
+</mapper>
+

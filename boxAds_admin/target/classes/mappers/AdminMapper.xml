@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.boxads.main.mapper.AdminMapper">
+	<select id="selectAdmin" parameterType="AdminVO" resultType="AdminVO">
+		SELECT 
+		    *
+		FROM
+		    admin A
+		LEFT JOIN
+    		admin_auth U ON A.idx = U.a_idx
+		<where>
+		    id = #{id} 
+		    AND pw = #{pw}		
+		</where>		
+	</select>
+	
+	<update id="updateLoginCnt" parameterType="AdminVO">
+		UPDATE admin 
+		SET 
+		    login_cnt = login_cnt + 1,
+		    login_date = now()
+		WHERE
+		    idx = #{idx}
+	</update>
+</mapper>
+

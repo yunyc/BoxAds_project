@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- <include resource="org/springframework/boot/logging/logback/base.xml"/> -->
+    
+    
+<!-- log4jdbc-log4j2 -->
+	<logger name="jdbc.sqlonly">
+		<level value="DEBUG" />
+	</logger>
+	<logger name="jdbc.sqltiming">
+		<level value="DEBUG" />
+	</logger>
+	<logger name="jdbc.audit">
+		<level value="WARN" />
+	</logger>
+	<logger name="jdbc.resultset">
+		<level value="INFO" />
+	</logger>
+	<logger name="jdbc.resultsettable">
+		<level value="INFO" />
+	</logger>
+	<logger name="jdbc.connection">
+		<level value="INFO" />
+	</logger>
+ 
+ 
+</configuration>

@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.main.mapper.BoardMapper">
+
+	<sql id="where">
+			<if test="idx != null and idx != 0">
+				AND B.idx = #{idx}
+			</if>
+			<if test='state != null and state != ""'>
+				AND B.state = #{state}
+			</if>
+			<if test="insertDate != null and insertDate != '' and endDate != null and endDate != ''">
+				AND DATE(B.insert_date) between #{insertDate} AND #{endDate}
+			</if>
+			<if test="category != null and category != ''">
+				AND B.category = #{category}
+			</if>
+			<if test='replyFlag != null and replyFlag != ""'>
+				AND B.reply_flag = #{replyFlag}
+			</if>
+			<if test="keyword != null and keyword != ''">
+				<choose>
+					<when test="searchType == 'title'">
+						AND B.title like CONCAT('%', #{keyword},'%')
+					</when>
+					<when test="searchType == 'content'">
+						AND B.content like CONCAT('%', #{keyword},'%')
+					</when>
+					<when test="searchType == 'name'">
+						AND A.name like CONCAT('%', #{keyword},'%')
+					</when>
+				</choose>
+			</if>
+			<if test='adGroup != null and adGroup != ""'>
+				AND B.ad_group = #{adGroup}
+			</if>
+	</sql>
+
+	<select id="selectBoardList" parameterType="BoardVO" resultType="BoardVO">
+		SELECT DISTINCT B.idx
+					   ,B.title
+						,B.content
+						,B.type
+						,B.insert_date
+						,(CASE WHEN B.state = 'Y' THEN '노출'
+												  ELSE '미노출' END) state
+						,B.notice_flag
+						,B.category
+						,(CASE WHEN B.ad_group = 'C' THEN '공통'
+							   WHEN B.ad_group = 'O' THEN '운영자'
+							   WHEN B.ad_group = 'A' THEN '제휴사' END) adGroup
+						,A.name
+						,F.parent
+						,C.name categoryName
+			     FROM board B
+			LEFT JOIN admin A
+					 ON B.writer = A.idx
+			LEFT JOIN file F
+					 ON B.idx = F.parent AND F.type = #{type}
+			LEFT JOIN code_manage C
+					 ON B.category = C.idx
+					 <where>
+					 	<include refid="where"/>
+					 	<if test="type != null and type != ''">
+							AND B.type = #{type}
+						</if>
+					 </where>
+				 GROUP BY B.idx
+				 ORDER BY B.notice_flag DESC, B.insert_date DESC
+				 <if test="excel != 'EXCEL'">
+					LIMIT #{start}, #{end}		
+				</if>
+	</select>
+	
+	<insert id="insertBoardList" useGeneratedKeys="true" keyProperty="idx" parameterType="BoardVO">
+		INSERT INTO board(idx, type, title, content, writer, state, notice_flag, category, ad_group)
+			VALUES(IF(#{idx} != 0, #{idx}, NULL), #{type}, #{title}, #{content}, #{writer}, IFNULL(#{state}, 'N'), #{noticeFlag}, #{category}, #{adGroup})
+			ON DUPLICATE KEY UPDATE title = VALUES(title), content = VALUES(content), writer = VALUES(writer), update_date = NOW(), 
+									state = VALUES(state), notice_flag = VALUES(notice_flag), ad_group = VALUES(ad_group), category = VALUES(category) 
+	</insert>
+	
+	<delete id="deleteBoardList" parameterType="BoardVO">
+		DELETE FROM board
+				WHERE idx = #{idx} AND type = #{type}
+	</delete>
+	
+	<select id="selectQnaList" parameterType="BoardVO" resultType="BoardVO">
+		 		SELECT DISTINCT B.idx
+								,B.title
+								,B.content
+								,B.insert_date
+								,(CASE WHEN B.reply_flag = 'Y' THEN '답변완료'
+												  		  ELSE '답변대기' END) reply_flag
+								,A.name
+								,A.id email	
+								,F.parent
+								,(SELECT insert_date FROM board_qna
+													WHERE parent = B.idx
+													ORDER BY insert_date desc
+				   									LIMIT 1) replyDate
+						FROM board_qna B
+				 LEFT JOIN member A
+						  ON B.writer = A.idx
+				LEFT JOIN file F 
+				ON F.parent = B.idx AND F.type = #{type}
+				WHERE B.parent = 0
+				<include refid="where"/>
+				ORDER BY B.insert_date DESC
+				<if test="excel != 'EXCEL'">
+					LIMIT #{start}, #{end}		
+				</if>
+								
+	</select>
+	
+	<update id="updateReplyFlag" parameterType="BoardVO">
+		UPDATE board_qna
+			SET reply_flag = 'Y'
+			WHERE idx = #{idx}
+	</update>
+	
+	<select id="selectReplyList" parameterType="BoardVO" resultType="BoardVO">
+		 SELECT q.idx
+						,q.content
+						,q.parent
+						,q.insert_date
+						,a.name			
+				FROM board_qna q
+		 LEFT JOIN admin a
+				  ON q.writer = a.idx
+				  WHERE parent = #{parent}					
+	</select>
+	
+	<insert id="insertReplyList" useGeneratedKeys="true" keyProperty="idx" parameterType="BoardVO">
+		INSERT INTO board_qna(parent, title, content, writer)
+			VALUES(#{parent}, #{title}, #{content}, #{writer})
+	</insert>
+	
+	<delete id="deleteQnaList" parameterType="BoardVO">
+		DELETE FROM board_qna
+			WHERE parent = #{idx} AND type = #{type}
+	</delete>
+	
+	<select id="selectBannerList" parameterType="BoardVO" resultType="BoardVO">
+		SELECT B.idx
+			  ,B.type
+		      ,B.title
+		      ,(CASE WHEN B.state = 'Y' THEN '노출'
+										ELSE '미노출' END) state
+		      ,B.url
+		      ,B.window
+		      ,CONCAT(date_format(B.start_date, '%Y-%m-%d'), ' ~ ' ,date_format(B.end_date, '%Y-%m-%d')) startDate
+		      ,cast(date_format(B.start_date, '%H') as UNSIGNED) as startTime
+		      ,cast(date_format(B.end_date, '%H') as UNSIGNED) as endTime
+		      ,B.insert_date
+		      ,A.name
+		FROM banner B
+		LEFT JOIN admin A
+		ON B.writer = A.idx
+		<where>
+			<include refid="where"/>
+			<if test="type != null and type != ''">
+				AND B.type = #{type}
+			</if>
+		</where>
+		ORDER BY B.insert_date desc
+		<if test="excel != 'EXCEL'">
+			LIMIT #{start}, #{end}		
+		</if>
+		
+	</select>
+	
+	<insert id="insertBannerList" useGeneratedKeys="true" keyProperty="idx" parameterType="BoardVO">
+		INSERT INTO banner(idx, type, title, writer, state, url, window, start_date, end_date)
+				VALUES(IF(#{idx} != 0, #{idx}, NULL), #{type}, #{title}, #{writer}, IFNULL(#{state}, 'N'), #{url}, #{window}, CONCAT(#{startDate}, ' ', #{startTime}) , CONCAT(#{endDate}, ' ',#{endTime}))
+				ON DUPLICATE KEY UPDATE title = VALUES(title), url = VALUES(url), window = VALUES(window), start_date = VALUES(start_date), end_date = VALUES(end_date), state = VALUES(state)
+	</insert>
+	
+	<delete id="deleteBannerList" parameterType="BoardVO">
+		DELETE FROM banner
+			WHERE idx = #{idx} AND type = #{type}
+	</delete>
+	
+	<select id="selectBoardCnt" parameterType="BoardVO" resultType="map">
+		SELECT  count(B.idx) boardCnt
+		  FROM board B
+	 LEFT JOIN admin A
+		    ON B.writer = A.idx
+		<where>
+			<include refid="where"/>
+			<if test="type != null and type != ''">
+				AND B.type = #{type}
+			</if>
+		</where>
+	</select>
+	
+	<select id="selectBannerCnt" parameterType="BoardVO" resultType="map">
+		SELECT count(B.idx) boardCnt
+		  FROM banner B
+	 LEFT JOIN admin A
+		    ON B.writer = A.idx
+		<where>
+			<include refid="where"/>
+			<if test="type != null and type != ''">
+				AND B.type = #{type}
+			</if>
+		</where>
+	</select>
+	
+	<select id="selectQnaCnt" parameterType="BoardVO" resultType="map">
+		SELECT COUNT(B.idx) boardCnt		
+		  FROM board_qna B
+	 LEFT JOIN member A
+		    ON B.writer = A.idx
+	     WHERE B.parent = 0
+		<include refid="where"/>
+	</select>
+	
+	<select id="selectTerms" parameterType="BoardVO" resultType="BoardVO">
+		SELECT 
+		    *
+		FROM
+		    terms
+		WHERE
+		    type = #{type}
+	</select>
+
+	<insert id="insertTerms" parameterType="hashMap">
+		INSERT INTO terms (idx, writer, type, content, update_date) 
+		VALUES (
+		<choose>
+			<when test="idx != ''">#{idx}</when>
+			<otherwise>NULL</otherwise>	
+		</choose>
+		, #{writer}, #{type}, #{content}, NOW())
+		ON DUPLICATE KEY UPDATE content = #{content}, writer = #{writer}, update_date = NOW() 
+	</insert>
+</mapper>

@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.order.mapper.OrderMapper">
+
+	<sql id="odWhere">
+		<where>
+		    <if test="idx != null and idx != 0">
+		    	AND O.idx = #{idx}	
+		   </if>
+		   <if test="state != null and state != ''">
+		    	AND O.state LIKE CONCAT(#{state}, '%') 
+		   </if>
+		   <if test="oState != null and oState.length != 0">
+		    	AND O.state IN(<foreach collection="oState" item="oState" separator=",">#{oState}</foreach>) 
+		   </if>
+		   <if test="pCIdx != null and pCIdx.length != 0">
+		    	AND B.p_c_idx IN(<foreach collection="pCIdx" item="pCIdx" separator=",">#{pCIdx}</foreach>)
+		   </if>
+		   <if test="startDate != null and startDate != ''">
+		    	AND DATE(O.insert_date) between #{startDate} AND #{endDate}
+		   </if>
+		   <if test="keyword != null and keyword != ''">
+		    	<choose>
+		    		<when test='searchType == "orderCode"'>
+		    			AND O.order_code LIKE CONCAT('%', #{keyword} '%')
+		    		</when>
+		    		<when test='searchType == "bTitle"'>
+		    			AND B.title LIKE CONCAT('%', #{keyword} '%')
+		    		</when>
+		    		<when test='searchType == "aTitle"'>
+		    			AND A.title LIKE CONCAT('%', #{keyword} '%')
+		    		</when>
+		    	</choose>
+		   </if>
+		   <choose>
+				<when test='dash == "1"'>
+					AND O.idx in 
+				    (SELECT O.idx FROM order_info O 
+						JOIN
+						(SELECT B.* FROM (SELECT  o_idx, MAX(insert_date) AS insert_date FROM process_log GROUP BY o_idx) A
+						LEFT JOIN process_log B ON A.o_idx = B.o_idx AND A.insert_date = B.insert_date) AS R ON R.o_idx = O.idx AND O.state = 'B4'
+						JOIN file F ON F.parent = R.idx AND F.type = 'B14' WHERE R.type != 'B15-1')
+				</when>
+				<when test='dash == "2"'>
+				    AND O.idx in           
+			        (SELECT O.idx FROM order_info O 
+						JOIN
+						(SELECT B.* FROM (SELECT  o_idx, MAX(insert_date) AS insert_date FROM process_log GROUP BY o_idx) A
+						LEFT JOIN process_log B ON A.o_idx = B.o_idx AND A.insert_date = B.insert_date) AS R ON R.o_idx = O.idx AND O.state = 'B5'
+						JOIN file F ON F.parent = R.idx AND F.type = 'B19' WHERE R.type != 'B20-1')
+				</when>
+		   </choose>		   
+		</where>
+	</sql>
+	
+	<select id="selectQRcode" parameterType="OrderVO" resultType="map">
+		SELECT idx
+		      ,parent
+		      ,site_url siteUrl
+		      ,url url
+		  FROM qrcode
+		 WHERE parent = #{idx}
+	</select>
+	
+	<select id="selectOrderList" parameterType="OrderVO" resultType="map">
+		SELECT
+		    O.idx,
+		    O.order_code AS orderCode,
+		    DATE_FORMAT(O.insert_date, '%Y.%m.%d %H:%m:%s') insertDate,
+		    O.total_price AS totalPrice,
+		    O.print_price AS printPrice,
+		    O.State AS state,
+		    B.state bState,
+		    IFNULL(C.price, 0) AS cpPrice,
+		    C.title AS cpTitle,
+		    B.title AS bTitle,
+		    B.box_cnt AS boxCnt,
+		    B.ad_price AS adPrice,
+		    B.box_code AS boxCode,    
+		    B.unit,
+		    DATE_FORMAT(B.sell_date, '%Y.%m') AS sellDate,
+		    BM.name AS bName,
+		    A.title AS aTitle,
+		    A.ad_code AS adCode,
+		    A.url,
+		    A.content,
+		    A.idx aIdx,
+		    QR.url qrcode,		    
+    		QR.idx AS qIdx,
+		    DATE_FORMAT(A.ad_start_date, '%y.%m.%d') AS adStartDate,
+    		DATE_FORMAT(A.ad_end_date, '%y.%m.%d') AS adEndDate,
+		    AM.name AS aName,
+		    GROUP_CONCAT(CA.name) AS cNames,
+		    CONCAT(P1.name, ' ', P2.name) AS proType,
+		    CONCAT(P3.name, ' ', P4.name) AS aProType,
+		    CONCAT(C2.name, ' > ', C1.name) AS cType,
+		    (CASE
+		        WHEN A.state = 'N' THEN '광고대기'
+		        WHEN A.state = 'Y' THEN '광고중'
+		        WHEN A.state = 'P' THEN '일시중지'
+		        WHEN A.state = 'E' THEN '광고종료'
+		    END) AS aState,
+		    (CASE
+		        WHEN O.state = 'N' THEN '광고대기'
+		        WHEN O.state = 'B1' THEN '광고구매'
+		        WHEN O.state = 'B2' THEN '광고승인'
+		        WHEN O.state = 'B3' THEN '광고진행'
+		        WHEN O.state = 'B4' THEN '1차광고인증'
+		        WHEN O.state = 'B5' THEN '2차광고인증'
+		        WHEN O.state = 'B6' THEN '광고완료'
+		        WHEN O.state = 'B7' THEN '구매취소'
+		        WHEN O.state = 'B8' THEN '판매종료'
+		        WHEN O.state = 'A1' THEN '광고신청'
+		        WHEN O.state = 'A2' THEN '신청승인'
+		        WHEN O.state = 'A3' THEN '광고집행'
+		        WHEN O.state = 'A4' THEN '신청취소'
+		    END) AS oState,
+		    (CASE
+		        WHEN R.state = 'B0' THEN '발주취소'
+		        WHEN R.state = 'B4' THEN '신규발주'
+		        WHEN R.state = 'B5' THEN '디자인 검수'
+		        WHEN R.state = 'B6' THEN '디자인 수정'
+		        WHEN R.state = 'B7' THEN '홍보물 제작중'
+		        WHEN R.state = 'B8' THEN '홍보물 제작완료'
+		        WHEN R.state = 'B9' THEN '배송처리'
+		    END) AS rState
+		FROM
+		    order_info O
+		        LEFT JOIN
+		    coupon_manage C ON C.idx = O.c_idx
+		        LEFT JOIN
+		    member M ON M.idx = O.m_idx
+		        LEFT JOIN
+		    box_product B ON B.idx = O.b_idx
+		        LEFT JOIN
+		    member BM ON B.writer = BM.idx
+		        LEFT JOIN
+		    ad_product A ON A.idx = O.a_idx
+		        LEFT JOIN
+		    member AM ON A.writer = AM.idx
+		        LEFT JOIN
+		    code_manage P2 ON B.p_c_idx = P2.idx
+		        LEFT JOIN
+		    code_manage P1 ON P2.parent = P1.idx
+				    LEFT JOIN
+		    code_manage P4 ON A.p_c_idx = P4.idx
+		        LEFT JOIN
+		    code_manage P3 ON P4.parent = P3.idx
+		        LEFT JOIN
+		    code_manage C1 ON B.c_c_idx = C1.idx
+		        LEFT JOIN
+		    code_manage C2 ON C1.parent = C2.idx
+		        LEFT JOIN
+		    code_manage CA ON FIND_IN_SET(CA.idx, A.c_c_idx)
+			    LEFT JOIN
+		    print_log R ON R.idx = (SELECT idx FROM print_log WHERE O.idx = o_idx ORDER BY insert_date DESC LIMIT 1)
+		    	LEFT JOIN 
+		    qrcode QR ON QR.parent = A.idx
+		    <include refid="odWhere"/>
+		    GROUP BY O.idx
+		    ORDER BY O.insert_date desc
+		    <if test="excel != 'EXCEL' and end != 0">
+				LIMIT #{start}, #{end}		
+			</if>
+	</select>
+	
+	<update id="updateState" parameterType="map">
+		UPDATE order_info
+		   SET state = #{state}, update_date = NOW()
+		   WHERE idx = #{idx}
+	</update>
+	
+	<select id="selectMemoList" parameterType="OrderVO" resultType="map">
+		SELECT *
+		      ,insert_date insertDate
+		  FROM order_memo
+		 WHERE o_idx = #{idx}
+	</select>
+	
+	<insert id="insertMemoList" parameterType="map">
+		INSERT INTO order_memo (writer, o_idx, content)
+		VALUES (#{writer}, #{oIdx}, #{content})
+	</insert>
+	
+	<select id="selectOrderCnt" parameterType="OrderVO" resultType="map">
+		SELECT count(O.idx) orderCnt  
+		FROM order_info O
+		LEFT JOIN member M 
+				 ON M.idx = O.m_idx
+		LEFT JOIN box_product B 
+		       ON B.idx = O.b_idx
+		LEFT JOIN member BM
+		       ON B.writer = BM.idx
+		LEFT JOIN ad_product A 
+		       ON A.idx = O.a_idx
+		LEFT JOIN member AM 
+		       ON A.writer = AM.idx
+		LEFT JOIN code_manage P2
+			   ON B.p_c_idx = P2.idx
+		LEFT JOIN code_manage P1
+			   ON P2.parent = P1.idx
+			   <include refid="odWhere"/>
+	</select>
+	
+	<update id="updateOrder" parameterType="OrderVO">
+		UPDATE order_info 
+		SET state = #{state}
+		WHERE idx = #{idx}
+	</update>
+		
+	<select id="selectOrderName" parameterType="OrderVO" resultType="hashMap">
+		SELECT 
+		    AM.name AS adName, BM.name AS boxName
+		FROM
+		    order_info O
+		        LEFT JOIN
+		    ad_product A ON A.idx = O.a_idx
+		        LEFT JOIN
+		    box_product B ON B.idx = O.b_idx
+		        LEFT JOIN
+		    member BM ON BM.idx = B.writer
+		        LEFT JOIN
+		    member AM ON AM.idx = A.writer
+		WHERE
+		    O.idx = #{idx}
+	</select>
+	
+
+</mapper>
+

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuration PUBLIC "-//mybatis.org//DTD Config 3.0/EN" "http://mybatis.org/dtd/mybatis-3-config.dtd">
+
+    <configuration>
+    	<settings>
+		  <!-- 자동으로 카멜케이스 규칙으로 변환 -->
+		    <setting name="mapUnderscoreToCamelCase" value="true"/>
+		 </settings>
+
+    	
+        <typeAliases>
+	        <typeAlias type="com.boxads.main.vo.AdminVO" alias="AdminVO" />
+			<typeAlias type="com.boxads.main.vo.BoardVO" alias="BoardVO" />
+			<typeAlias type="com.boxads.main.vo.FileVO" alias="FileVO" />
+			
+			<typeAlias type="com.boxads.setting.vo.CodeVO" alias="CodeVO" />
+			<typeAlias type="com.boxads.setting.vo.FeesVO" alias="FeesVO" />
+			<typeAlias type="com.boxads.setting.vo.UnitVO" alias="UnitVO" />
+			
+			<typeAlias type="com.boxads.member.vo.MemberVO" alias="MemberVO" />			
+			<typeAlias type="com.boxads.coupon.vo.CouponVO" alias="CouponVO" />
+			
+			<typeAlias type="com.boxads.product.vo.ProductVO" alias="ProductVO" />
+			<typeAlias type="com.boxads.print.vo.PrintVO" alias="PrintVO" />
+						
+			
+			<typeAlias type="com.boxads.order.vo.OrderVO" alias="OrderVO" />
+			<typeAlias type="com.boxads.order.vo.LogVO" alias="LogVO" />
+			<typeAlias type="com.boxads.cash.vo.CashVO" alias="CashVO" />
+					
+        </typeAliases>
+    </configuration>
