@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans:beans
+	xmlns="http://www.springframework.org/schema/mvc"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:beans="http://www.springframework.org/schema/beans"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/task 
+		http://www.springframework.org/schema/task/spring-task.xsd">
+
+	<!-- DispatcherServlet Context: defines this servlet's request-processing infrastructure -->
+
+	<!-- Enables the Spring MVC @Controller programming model -->
+	<mvc:annotation-driven />
+	<mvc:default-servlet-handler />
+
+	<!-- schedule -->
+	<!-- <beans:bean id="ScheduleController" class="com.boxads.schedule.web.ScheduleController" /> -->
+	<beans:bean id="ScheduleTestController" class="com.boxads.schedule.web.ScheduleTestController" />
+	<task:scheduler id="scheduler" pool-size="10" />
+	<task:executor id="taskExecutor" pool-size="10" />
+	<task:annotation-driven executor="taskExecutor" scheduler="scheduler" />
+
+	<!-- Handles HTTP GET requests for /resources/** by efficiently serving 
+		up static resources in the ${webappRoot}/resources directory -->
+	<resources mapping="/resources/**" location="/resources/" />
+	<resources mapping="/font/**" location="/resources/font/" />
+	<resources mapping="/css/**" location="/resources/css/" />
+	<resources mapping="/images/**" location="/resources/images/" />
+	<resources mapping="/js/**" location="/resources/js/" />
+	<resources mapping="/favicon/**" location="/resources/favicon/" />
+	<!-- <resources mapping="/mailForm/**" location="/resources/mailForm/" /> -->
+	<resources mapping="/upload/**" location="file:/home/tomcat/upload/"/>
+
+	<!-- Resolves views selected for rendering by @Controllers to .jsp resources 
+		in the /WEB-INF/views directory -->
+	<beans:bean
+		class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<beans:property name="prefix" value="/WEB-INF/views/" />
+		<beans:property name="suffix" value=".jsp" />
+		<beans:property name="order" value="1" />
+	</beans:bean>
+
+	<context:component-scan base-package="com.boxads"></context:component-scan>
+
+	<beans:bean id="multipartResolver"
+		class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+		<!-- <beans:property name="maxUploadSize" value="10485760" /> 10mb -->
+	</beans:bean>
+
+ 	<beans:bean id="uploadPath" class="java.lang.String">
+		<beans:constructor-arg value="/home/tomcat/upload"></beans:constructor-arg>	
+	</beans:bean>
+	
+	<beans:bean id="mailPath" class="java.lang.String">
+		<beans:constructor-arg value="/usr/apache-tomcat-9.0.26/webapps/ROOT/resources/mailForm"></beans:constructor-arg>				
+	</beans:bean>
+	
+	<beans:bean id="paylogPath" class="java.lang.String">
+		<beans:constructor-arg value="/usr/apache-tomcat-9.0.26/paylog"></beans:constructor-arg>				
+	</beans:bean>
+	   
+    <context:property-placeholder location="/WEB-INF/spring/props/pay.properties"/>
+    <beans:bean id="pg_authkey" class="java.lang.String">
+        <beans:constructor-arg value="${PG_AUTHKEY}"/>       
+    </beans:bean>
+    <beans:bean id="p_mid" class="java.lang.String">
+        <beans:constructor-arg value="${P_MID}"/>       
+    </beans:bean>
+
+
+ 	<!-- message -->
+ 	<beans:bean id="messageSource" 
+		class="org.springframework.context.support.ReloadableResourceBundleMessageSource"> 
+		<beans:property name="basenames"> 
+			<beans:list>
+				<beans:value>/WEB-INF/spring/props/message/message</beans:value>
+			</beans:list>			
+		</beans:property>		
+		<beans:property name="defaultEncoding" value="UTF-8" /> 
+		<beans:property name="cacheSeconds" value="60" /> 
+	</beans:bean> 
+	
+	<!-- 언어 정보를 세션에 저장하여 사용합니다. --> 
+	<beans:bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver" />
+ 
+ 	<!-- interceptor -->
+	<mvc:interceptors>
+		<mvc:interceptor>
+			<mvc:mapping path="/wallet/**" />
+			<mvc:mapping path="/member/**" />
+			<mvc:mapping path="/profile/**" />
+			<mvc:mapping path="/order/**" />
+			<mvc:mapping path="/box/**" />
+			<mvc:mapping path="/ad/**" />
+			<mvc:mapping path="/deal/**" />
+			<mvc:mapping path="/board/qna**" />
+			<mvc:exclude-mapping path="/box/bxAjaxList" />
+			<mvc:exclude-mapping path="/ad/adAjaxList" />
+			<mvc:exclude-mapping path="/box/detail" />
+			<mvc:exclude-mapping path="/ad/detail" />
+			<mvc:exclude-mapping path="/wallet/pNote" />			
+            <mvc:exclude-mapping path="/resources/**" />            
+			<beans:bean id="AccountInterceptor"
+				class="com.boxads.main.interceptor.AccountInterceptor" />
+		</mvc:interceptor>
+	</mvc:interceptors> 
+
+	<tx:annotation-driven/>
+	
+	<!-- 파일 다운로드 -->
+	<beans:bean id="downloadViewResolver" class="org.springframework.web.servlet.view.BeanNameViewResolver">
+		<beans:property name="order" value="0" />
+	</beans:bean>
+
+</beans:beans>
+
+
+
+
