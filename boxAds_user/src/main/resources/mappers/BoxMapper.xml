@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.box.mapper.BoxMapper">
+
+	<sql id="where">
+		<where>
+			<if test="idx != null and idx != ''">
+				AND B.idx = #{idx}
+			</if>
+			<if test="writer != null and writer != ''">
+				AND B.writer = #{writer}
+			</if>
+			<if test="title != null and title != ''">
+				AND B.title LIKE CONCAT('%', #{title}, '%')
+			</if>
+			<if test="startDate != null and startDate != ''">
+				AND DATE(B.insert_date) between #{startDate} AND #{endDate} 
+			</if>
+			<if test="state != null and state != ''">
+				AND B.state = #{state}
+			</if>
+			<if test="cCIdx != null and cCIdx != ''">
+				AND (B.c_c_idx = #{cCIdx} OR C.idx = #{cCIdx}) 
+			</if>
+			<if test='favFlag == "Y"'>
+				AND W.fav_idx IS NOT null
+			</if>
+			<if test='searchKeyword != null and searchKeyword != ""'>
+				AND (B.title LIKE CONCAT('%', #{searchKeyword}, '%') 
+				OR B.intro LIKE CONCAT('%', #{searchKeyword}, '%')
+				OR M.name LIKE CONCAT('%', #{searchKeyword}, '%')
+				OR P1.name LIKE CONCAT('%', #{searchKeyword}, '%')
+				OR C.name LIKE CONCAT('%', #{searchKeyword}, '%'))
+			</if>
+		</where>
+	</sql>
+
+	<select id="selectBoxList" parameterType="BoxVO" resultType="BoxVO">
+		SELECT B.idx
+						,B.state
+						,B.title
+						,B.content
+						,B.intro
+						,B.writer
+						,B.p_c_idx
+						,B.c_c_idx
+						,B.ctm_age
+						,B.ctm_gender
+						,B.ctm_type
+						,B.avg_price
+						,B.url
+						,B.box_code
+						,B.pdt_cnt
+						,B.box_cnt
+						,B.view_cnt
+						,B.unit
+						,date_format(B.sell_date, '%Y년 %m월') sellDate
+						,B.insert_date
+						,B.ad_price
+						,B.sold_out_flag
+						,(CASE WHEN P1.name = '전단지' THEN 14
+						       WHEN P1.name = '스티커' THEN 4
+						       WHEN P1.name = '샘플' THEN 5 END) totalCnt
+						,M.name
+						,M.site_url
+						,M.intro AS mIntro
+						,count(O.b_idx) odCnt
+						,ifnull(W2.favCnt, 0) AS favCnt 
+						,C1.name secCtg
+						,C2.name thrCtg
+						,P1.name secPro
+						,P2.name thrPro
+						,PF.url profile
+						,RF.url fileName
+						<if test="mIdx != null and mIdx != 0">
+							,if(#{mIdx} = W.m_idx, 'Y', 'N') AS favFlag
+						</if>						
+					FROM box_product B
+				LEFT JOIN member M
+						ON M.idx = B.writer
+				LEFT JOIN file F
+						ON F.parent = M.idx
+				LEFT JOIN code_manage C2
+						ON B.c_c_idx = C2.idx
+				LEFT JOIN code_manage C1
+						ON C2.parent = C1.idx
+				LEFT JOIN code_manage P2
+						ON B.p_c_idx = P2.idx
+				LEFT JOIN code_manage P1
+						ON P2.parent = P1.idx
+				LEFT JOIN file PF
+						ON PF.parent = M.idx AND PF.type = 'P'
+				LEFT JOIN file RF
+						ON RF.parent = B.idx AND RF.type = 'E'
+				LEFT JOIN wish_product W
+						ON W.fav_idx = B.idx AND W.type = 'B'
+				LEFT JOIN (SELECT fav_idx, COUNT(fav_idx) AS favCnt FROM wish_product WHERE type = 'B' GROUP BY fav_idx) W2 
+						ON W2.fav_idx = B.idx
+				LEFT JOIN order_info O
+						ON O.b_idx = B.idx AND O.state LIKE 'B%'
+		<include refid="where"/>
+		GROUP BY B.idx
+		ORDER BY B.insert_date desc
+		<if test="end != null and end != 0">
+			LIMIT #{start}, #{end}
+		</if>
+	</select>
+	
+	<insert id="insertBoxList"  parameterType="BoxVO" useGeneratedKeys="true" keyProperty="idx">
+		INSERT INTO box_product (idx, state, title, content, writer, p_c_idx, c_c_idx, ctm_age, ctm_gender, ctm_type ,url, pdt_cnt, box_cnt, unit, ad_price, sell_date, avg_price, intro, box_code)
+		VALUES ((IF(#{idx} != 0, #{idx}, NULL)), #{state}, #{title}, #{content}, #{writer}, #{pCIdx}, #{cCIdx}, #{ctmAge}, #{ctmGender}, #{ctmType}, #{url}, #{pdtCnt}, #{boxCnt}, #{unit}, #{adPrice}, #{sellDate}, #{avgPrice}, #{intro}, #{boxCode})
+		
+		ON DUPLICATE KEY UPDATE title = VALUES(title), content = VALUES(content), writer = VALUES(writer), p_c_idx = VALUES(p_c_idx), c_c_idx = VALUES(c_c_idx), ctm_age = VALUES(ctm_age)
+		, ctm_gender = VALUES(ctm_gender), ctm_type = VALUES(ctm_type), url = VALUES(url), pdt_cnt = VALUES(pdt_cnt), box_cnt = VALUES(box_cnt), unit = VALUES(unit)
+		, ad_price = VALUES(ad_price), sell_date = VALUES(sell_date), avg_price = VALUES(avg_price), intro = VALUES(intro), state = VALUES(state)
+	</insert>
+
+	
+	<delete id="deleteBoxList"  parameterType="BoxVO">
+		DELETE FROM box_product
+		 WHERE idx = #{idx}
+	
+	</delete>
+	
+	<select id="selectBoxCnt" parameterType="BoxVO" resultType="map">
+		SELECT count(distinct B.idx) boxCnt
+		FROM box_product B
+		LEFT JOIN member M
+			    ON M.idx = B.writer
+		LEFT JOIN file RF
+				ON RF.parent = B.idx AND RF.type = 'E'
+		LEFT JOIN wish_product W
+				ON W.fav_idx = B.idx AND W.type = 'B'
+		LEFT JOIN code_manage C2
+				ON B.c_c_idx = C2.idx
+		LEFT JOIN code_manage C
+				ON C2.parent = C.idx
+		LEFT JOIN code_manage P2
+				ON B.p_c_idx = P2.idx
+		LEFT JOIN code_manage P1
+				ON P2.parent = P1.idx
+		  <include refid="where"/>
+	</select>
+	
+	<select id="selectBoxListAjax" parameterType="hashMap" resultType="BoxVO">
+		SELECT 
+		    B.idx,
+		    B.state,
+		    B.box_code,
+		    B.title,
+		    B.writer,
+		    B.pdt_cnt,
+		    B.sell_cnt,
+		    B.box_cnt,
+		    B.view_cnt,
+		    B.unit,
+		    date_format(B.sell_date, '%Y년 %m월') AS sell_date,
+		    B.ad_price,
+		    B.intro,
+		    B.sold_out_flag,
+		    C2.name AS thrCtg,
+		    C.name AS secCtg,
+		    (SELECT COUNT(*) FROM wish_product WHERE fav_idx = B.idx AND type = 'B') AS favCnt,
+		    M.name,
+		    PF.url AS profile,
+		    REP.url AS fileName
+		    <if test="mIdx != null">
+		    ,
+		    if(W.idx is not null, 'Y', 'N') AS favFlag		    
+		    </if>
+		FROM
+		    box_product B
+		        LEFT JOIN
+		    member M ON B.writer = M.idx
+		        LEFT JOIN
+		    file PF ON PF.parent = M.idx AND PF.type = 'P'
+		        LEFT JOIN
+		    file REP ON REP.parent = B.idx AND REP.type = 'E'
+		        LEFT JOIN
+		    code_manage C2 ON B.c_c_idx = C2.idx
+		        LEFT JOIN
+		    code_manage C ON C2.parent = C.idx
+		    	LEFT JOIN 
+		    code_manage P2 ON B.p_c_idx = P2.idx
+				LEFT JOIN 
+			code_manage P1 ON P2.parent = P1.idx
+		    <if test="mIdx != null">
+				    LEFT JOIN
+		    	wish_product W ON W.fav_idx = B.idx AND W.type = 'B' AND W.m_idx = #{mIdx}		    
+		    </if>
+		<include refid="where"/>
+		ORDER BY 
+			<choose>
+				<when test='order == "N"'>
+					B.insert_date desc
+				</when>
+				<when test='order == "V"'>
+					B.view_cnt desc
+				</when>
+				<when test='order == "F"'>
+					favCnt desc
+				</when>
+				<otherwise>
+					B.insert_date desc
+				</otherwise>
+			</choose>
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selectBoxDetail" parameterType="BoxVO" resultType="BoxVO">
+		SELECT 
+		    B.idx,
+		    B.state,
+		    B.box_code,
+		    B.title,
+		    B.content,
+		    B.writer,
+		    B.p_c_idx,
+		    B.c_c_idx,
+		    B.ctm_age,
+		    B.ctm_gender,
+		    B.ctm_type,
+		    B.avg_price,
+		    B.url,
+		    B.pdt_cnt,
+		    B.sell_cnt,
+		    B.box_cnt,
+		    B.view_cnt,
+		    B.unit,
+		    B.reason,
+		    date_format(B.sell_date, '%Y년 %m월') AS sell_date,
+		    B.insert_date,
+		    B.update_date,
+		    B.ad_price,
+		    B.intro,
+		    B.sold_out_flag,
+		    C.name AS thrCtg,
+		    C2.name AS secCtg,
+		    C3.name AS thrPro,
+		    C4.name AS secPro,
+		    M.name,
+		    PF.url AS profile,
+		    REP.url AS fileName
+		FROM
+		    box_product B
+		        LEFT JOIN
+		    member M ON B.writer = M.idx
+		        LEFT JOIN
+		    file PF ON PF.parent = M.idx AND PF.type = 'P'
+		        LEFT JOIN
+		    file REP ON REP.parent = B.idx AND REP.type = 'E'
+		        LEFT JOIN
+		    code_manage C ON B.c_c_idx = C.idx
+		        LEFT JOIN
+		    code_manage C2 ON C.parent = C2.idx
+		        LEFT JOIN
+		    code_manage C3 ON B.p_c_idx = C3.idx
+		        LEFT JOIN
+		    code_manage C4 ON C3.parent = C4.idx
+		    <where>
+		    	B.idx = #{idx}
+		    </where>
+	</select>
+</mapper>
+

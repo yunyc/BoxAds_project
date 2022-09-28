@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.deal.mapper.BankInfoMapper">
+	
+	<select id="selectBankInfo" parameterType="BankInfoVO" resultType="BankInfoVO">
+		SELECT 
+		    M.idx AS m_idx,
+		    M.name,
+		    BI.idx AS `idx`,
+		    BI.bank,
+		    BI.acc_number,
+		    BI.insert_date,
+		    BI.depositor
+		FROM
+		    member M
+		        LEFT JOIN
+		    bank_info BI ON BI.m_idx = M.idx
+		WHERE
+		<choose>
+			<when test="idx != null and idx != 0">
+				BI.idx = #{idx}
+			</when>
+			<otherwise>
+				M.idx = #{mIdx}
+			</otherwise>
+		</choose>
+	</select>
+	
+	<select id="selectBankInfoWithFile" parameterType="java.util.Map" resultType="java.util.Map">
+		SELECT
+			bi.idx AS idx,
+			bi.m_idx AS mIdx,
+			bi.bank AS bank,
+			bi.acc_number AS accNumber,
+			bi.insert_date AS insertDate,
+			bi.depositor AS depositor,
+			f.idx AS fileIdx,
+			f.parent AS fileParent,
+			f.type AS fileType,
+			f.real_name AS fileName,
+			f.url AS fileUrl,
+			f.size AS fileSize,
+			f.file_type AS fileType,
+			f.insert_date AS fileInsertDate
+		FROM
+			bank_info bi
+				LEFT JOIN
+			file f ON f.parent = bi.idx
+		<where>
+			f.type = 'CB'
+			<if test="idx != null and idx != 0">	AND bi.idx = #{idx}</if>
+			<if test="mIdx != null and mIdx != 0">	AND bi.m_idx = #{mIdx}</if>
+		</where>
+	</select>
+	
+	<insert id="insertBankInfo" parameterType="BankInfoVO" useGeneratedKeys="true" keyProperty="idx">
+		INSERT INTO bank_info (idx, m_idx, bank, acc_number, depositor)
+		VALUES (IF(#{idx} != 0, #{idx}, NULL), #{mIdx}, #{bank}, #{accNumber}, #{depositor})
+		ON DUPLICATE KEY UPDATE bank = VALUES(bank), acc_number = VALUES(acc_number), depositor = VALUES(depositor) 
+	</insert>
+</mapper>
+

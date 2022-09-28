@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.common.mapper.MessageMapper">
+
+	<select id="selectMessageList" parameterType="MessageVO" resultType="MessageVO">
+		SELECT 
+			G.idx, G.writer, G.receiver, G.content, DATE_FORMAT(G.insert_date, '%y.%m.%d') AS insert_date,
+    		M.name, PF.url AS prImg, IF(DATEDIFF(14 > G.insert_date, NOW()), 'N', 'Y') AS newFlag
+		FROM
+		<choose>
+			<when test="keyword != null and keyword != '' and searchType == 'content'">
+				(SELECT * FROM message WHERE content LIKE CONCAT('%', #{keyword},'%') AND (receiver = #{writer} OR writer = #{writer}) GROUP BY IF(writer = 112, receiver, writer)) AS G
+			</when>
+			<otherwise>
+			    (SELECT G2.* FROM 
+					(SELECT writer, receiver, MAX(insert_date) AS insert_date 
+			        FROM message
+					WHERE receiver = #{writer} OR writer = #{writer}			        
+			        GROUP BY IF(writer = #{writer}, receiver, writer)) AS G1
+    				JOIN message G2 ON G1.insert_date = G2.insert_date			        
+				) AS G			
+			</otherwise>
+		</choose>
+				LEFT JOIN
+		    member M ON ((G.receiver = M.idx OR G.writer = M.idx) AND M.idx != #{writer})
+		        LEFT JOIN 
+    		file PF on PF.parent = M.idx and PF.type = 'P'
+    		<where>
+    			<if test="keyword != null and keyword != '' and searchType == 'name'">
+					AND M.name like CONCAT('%', #{keyword},'%')
+				</if>
+    		</where>
+		ORDER BY G.insert_date DESC
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selectMessageCnt" parameterType="MessageVO" resultType="int">
+		SELECT 
+			COUNT(G.idx)
+		FROM
+		<choose>
+			<when test="keyword != null and keyword != '' and searchType == 'content'">
+				(SELECT * FROM message WHERE content LIKE CONCAT('%', #{keyword},'%') AND (receiver = #{writer} OR writer = #{writer}) GROUP BY IF(writer = 112, receiver, writer)) AS G
+			</when>
+			<otherwise>
+			    (SELECT G2.* FROM 
+					(SELECT writer, receiver, MAX(insert_date) AS insert_date 
+			        FROM message
+					WHERE receiver = #{writer} OR writer = #{writer} 
+					GROUP BY IF(writer = #{writer}, receiver, writer)) AS G1
+    				JOIN message G2 ON G1.insert_date = G2.insert_date			        
+				) AS G	
+			</otherwise>
+		</choose>
+				LEFT JOIN
+		    member M ON ((G.receiver = M.idx OR G.writer = M.idx) AND M.idx != #{writer})
+		        LEFT JOIN 
+    		file PF on PF.parent = M.idx and PF.type = 'P'
+    		<where>
+    			<if test="keyword != null and keyword != '' and searchType == 'name'">
+					AND M.name like CONCAT('%', #{keyword},'%')
+				</if>
+    		</where>
+	</select>
+	
+	<insert id="insertMessage" parameterType="MessageVO">
+		INSERT INTO message (writer, receiver, content) 
+		VALUES (#{writer}, #{receiver}, #{content})
+		<selectKey keyProperty="idx" resultType="int" order="AFTER">
+            SELECT LAST_INSERT_ID()
+        </selectKey>
+	</insert>
+	
+	<update id="updateMessage" parameterType="MessageVO">
+		UPDATE message SET confirm_date = NOW()
+		<where>
+			AND confirm_date IS NULL
+        	AND ((writer = #{writer} AND receiver = #{receiver})
+        	OR (writer = #{receiver} AND receiver = #{writer}))
+		</where> 
+	</update>
+	
+	<select id="selectMessageByWriter" parameterType="MessageVO" resultType="MessageVO">
+		SELECT 
+		    G.*, F.url, F.real_name, F.idx AS fIdx
+		FROM
+		    message G        
+		        LEFT JOIN
+		    file F ON F.parent = G.idx AND F.type = 'MG'
+		WHERE
+		    (G.receiver = #{receiver} AND G.writer = #{writer}) OR (G.receiver = #{writer} AND G.writer = #{receiver})
+		ORDER BY G.insert_date ASC
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selectMessageByWriterCnt" parameterType="MessageVO" resultType="int">
+		SELECT 
+		    COUNT(G.idx)
+		FROM
+		    message G        
+		        LEFT JOIN
+		    file F ON F.parent = G.idx AND F.type = 'MG'
+		WHERE
+		    (G.receiver = #{receiver} AND G.writer = #{writer}) OR (G.receiver = #{writer} AND G.writer = #{receiver})		
+	</select>
+	
+	<select id="selectMemberForMesg" parameterType="MessageVO" resultType="MessageVO">
+		SELECT M.name, F.url AS prImg, M.idx
+		FROM member M 
+		LEFT JOIN file F ON F.parent = M.idx AND type = 'P'
+		WHERE M.idx = #{receiver}
+	</select>
+	
+	<select id="selectInitMessage" parameterType="MessageVO" resultType="MessageVO">
+		SELECT 
+		    G.idx,
+		    G.writer,
+		    G.receiver,
+		    G.content,
+		    CONCAT(DATE_FORMAT(G.insert_date, '%y.%m.%d'), '(',
+	            (CASE
+	                WHEN DAYOFWEEK(G.insert_date) = 1 THEN '일'
+	                WHEN DAYOFWEEK(G.insert_date) = 2 THEN '월'
+	                WHEN DAYOFWEEK(G.insert_date) = 3 THEN '화'
+	                WHEN DAYOFWEEK(G.insert_date) = 4 THEN '수'
+	                WHEN DAYOFWEEK(G.insert_date) = 5 THEN '목'
+	                WHEN DAYOFWEEK(G.insert_date) = 6 THEN '금'
+	                WHEN DAYOFWEEK(G.insert_date) = 7 THEN '토'
+	            END),
+	            ')') AS insertDate,
+		    M.name,
+		    PF.url AS prImg,
+		    IF(G.confirm_date IS NULL, 'Y', 'N') AS newFlag
+		FROM
+		    message G
+		        LEFT JOIN
+		    member M ON ((G.receiver = M.idx OR G.writer = M.idx) AND M.idx != #{writer})
+		        LEFT JOIN
+		    file PF ON PF.parent = M.idx AND PF.type = 'P'
+		    <where>
+		    	<!-- (G.receiver = #{writer} OR G.writer = #{writer}) -->
+		    	G.receiver = #{writer}
+		    </where>
+		ORDER BY G.insert_date desc
+		LIMIT #{end}				
+	</select>
+	
+	<delete id="deleteMessageFile" parameterType="hashMap">
+		<foreach collection="list" item="item" separator=";">
+			DELETE FROM file 
+			WHERE
+			    parent IN (SELECT idx FROM message WHERE (writer = #{mIdx} AND receiver = #{item}) OR (receiver = #{mIdx} AND writer = #{item}))
+			    AND type = 'MG'
+		</foreach>	
+	</delete>
+	
+	<delete id="deleteMessage" parameterType="hashMap">
+		<foreach collection="list" item="item" separator=";">						
+			DELETE FROM message 
+			WHERE
+			    (writer = #{mIdx} AND receiver = #{item}) OR (receiver = #{mIdx} AND writer = #{item})
+		</foreach>
+	</delete>
+	
+	<select id="selectOrderMessageInfo" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    COUNT(IF(confirm_date IS NULL, idx, NULL)) AS yet,
+		    COUNT(*) AS total
+		FROM
+		    message
+		WHERE
+		    receiver = #{receiver} AND writer = #{writer}
+	</select>
+	
+</mapper>
+

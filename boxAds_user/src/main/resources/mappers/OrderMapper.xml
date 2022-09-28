@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.common.mapper.OrderMapper">
+
+	<insert id="insertOrder" parameterType="OrderVO">
+		<!-- DB 설정에 멀티쿼리 추가 후 -->
+		
+		INSERT INTO order_info (order_code, m_idx, a_idx, b_idx, c_idx, pdt_unit, total_price, print_unit, print_price, box_cnt, state)
+		     VALUES (#{orderCode}, #{mIdx}, #{aIdx}, #{bIdx}, IF(#{cIdx} != 0, #{cIdx}, null ), #{pdtUnit}, #{totalPrice}, #{printUnit}, #{printPrice}, #{boxCnt}, #{state})
+		ON DUPLICATE KEY UPDATE state = VALUES(state);
+		<selectKey keyProperty="idx" resultType="int" >
+				SELECT LAST_INSERT_ID()
+		</selectKey>	
+			     
+		<!-- 쿠폰 사용 -->
+		<if test="cIdx != 0">
+			UPDATE coupon_issue 
+			SET use_flag = 'Y', use_date = NOW()
+			WHERE idx = #{cIdx};
+		</if>
+		
+		<!-- 판매 수 업데이트 후 품절 판별 처리 -->
+		<if test="state == 'B1' or state == 'A2'">
+			UPDATE box_product 
+			SET sell_cnt = IF(pdt_cnt > sell_cnt AND sold_out_flag = 'N', sell_cnt + 1, sell_cnt)
+			WHERE idx = #{bIdx};
+			    
+			UPDATE box_product 
+			SET sold_out_flag = IF(pdt_cnt = sell_cnt AND sold_out_flag = 'N', 'Y', sold_out_flag)
+			WHERE idx = #{bIdx};		
+		</if>		
+		
+		<!-- 수입 예상 캐시 및 지출 예상 캐시 입력 -->
+		
+	</insert>
+	
+	<update id="updateOrder" parameterType="OrderVO">
+		UPDATE order_info 
+		SET state = #{state}, update_date = NOW()
+		WHERE idx = #{idx}
+	</update>
+	
+	<select id="selectOrderDetail" parameterType="OrderVO" resultType="OrderVO">
+		SELECT 
+		    O.*, C.price AS cpPrice
+		FROM
+		    order_info O
+		        LEFT JOIN
+		    coupon_manage C ON C.idx = O.c_idx
+		WHERE
+		    O.idx = #{idx}	
+	</select>
+	
+	<sql id="adWhere">		
+		<if test="idx != null and idx != 0">
+			AND A.idx = #{idx}
+		</if>
+		<if test="writer != null and writer != ''">
+			AND A.writer = #{writer}
+		</if>
+		<if test='title != null and title != "" and table == "A"'>
+			AND A.title LIKE CONCAT('%', #{title}, '%')
+		</if>
+		<if test='title != null and title != "" and table == "B"'>
+			AND B.title LIKE CONCAT('%', #{title}, '%')
+		</if>
+		<if test="startDate != null and startDate != ''">
+			AND DATE(O.insert_date) between #{startDate} AND #{endDate} 
+		</if>
+	</sql>
+	
+	<sql id="boxWhere">		
+		<if test="idx != null and idx != 0">
+			AND B.idx = #{idx}
+		</if>
+		<if test="writer != null and writer != ''">
+			AND B.writer = #{writer}
+		</if>
+		<if test='title != null and title != "" and table == "A"'>
+			AND A.title LIKE CONCAT('%', #{title}, '%')
+		</if>
+		<if test='title != null and title != "" and table == "B"'>
+			AND B.title LIKE CONCAT('%', #{title}, '%')
+		</if>	
+		<if test="startDate != null and startDate != ''">
+			AND DATE(O.insert_date) between #{startDate} AND #{endDate} 
+		</if>			
+	</sql>
+	
+	<select id="selectAdOwnerList" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    O.idx,
+		    date_format(O.insert_date, '%y.%m.%d %H:%m:%s') AS insertDate,
+		    A.title AS adTitle,
+		    M.name,
+		    B.title AS boxTitle,    
+		    date_format(B.sell_date, '%Y.%m') AS sellDate,		    
+		    format(B.box_cnt, 0) AS boxCnt,
+		    format(O.pdt_unit * B.box_cnt, 0) AS adPrice,
+		    FORMAT(total_price, 0) AS totalPrice,
+		    O.state
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    member M ON M.idx = B.writer
+		<where>
+		    <include refid="adWhere"/>
+		    <if test="state != null and state != ''">
+				AND O.state = #{state}
+			</if>	
+			AND O.state LIKE #{type}
+		</where>
+		ORDER BY O.insert_date DESC
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selectAdOwnerCnt" parameterType="hashMap" resultType="int">
+		SELECT 
+		    count(*) AS total
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    member M ON M.idx = B.writer
+		<where>
+			<include refid="adWhere"/>
+		    <if test="state != null and state != ''">
+				AND O.state = #{state}
+			</if>					
+			AND O.state LIKE #{type}
+		</where>
+	</select>
+	
+	<select id="selectBoxOwnerList" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    O.idx,
+		    DATE_FORMAT(O.insert_date, '%y.%m.%d %H:%m:%s') AS insertDate,
+		    A.title AS adTitle,
+		    M.name,
+		    B.title AS boxTitle,
+		    DATE(A.ad_start_date) AS adStartDate,
+		    DATE(A.ad_end_date) AS adEndDate,
+		    DATE_FORMAT(B.sell_date, '%Y.%m') AS sellDate,
+		    B.box_cnt AS boxCnt,
+		    C2.name AS thrPro,
+		    C3.name AS secPro,
+		    FORMAT(O.pdt_unit * B.box_cnt, 0) AS adPrice,
+		    O.state
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    member M ON M.idx = A.writer
+		        LEFT JOIN
+		    code_manage C2 ON C2.idx = A.p_c_idx AND C2.type = 'P'
+		        LEFT JOIN
+		    code_manage C3 ON C3.idx = C2.parent AND C3.type = 'P'
+		<where>
+		    <include refid="boxWhere"/>
+		    <if test="state != null and state != ''">
+				AND O.state = #{state}
+			</if>	
+			AND O.state LIKE #{type}
+		</where>
+		ORDER BY O.insert_date DESC
+		LIMIT #{start}, #{end}
+	</select>
+	
+	<select id="selectBoxOwnerCnt" parameterType="hashMap" resultType="int">
+		SELECT 
+		    count(*) AS total
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx
+		        JOIN
+		    member M ON M.idx = A.writer
+		<where>
+			<include refid="boxWhere"/>
+		    <if test="state != null and state != ''">
+				AND O.state = #{state}
+			</if>	
+			AND O.state LIKE #{type}
+		</where>
+	</select>	
+	
+	<select id="selectOrderName" parameterType="OrderVO" resultType="hashMap">
+		SELECT 
+		    AM.name AS adName, BM.name AS boxName
+		FROM
+		    order_info O
+		        LEFT JOIN
+		    ad_product A ON A.idx = O.a_idx
+		        LEFT JOIN
+		    box_product B ON B.idx = O.b_idx
+		        LEFT JOIN
+		    member BM ON BM.idx = B.writer
+		        LEFT JOIN
+		    member AM ON AM.idx = A.writer
+		WHERE
+		    O.idx = #{idx}
+	</select>
+
+	<select id="adRequestCnt" parameterType="int" resultType="int">
+		SELECT 
+		    COUNT(*) AS AdCnt
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON A.idx = O.a_idx
+		WHERE
+		    A.idx = #{idx}
+	</select>
+	
+	<select id="selectMarketingInfo" parameterType="int" resultType="MemberVO">
+		SELECT 
+		    name, pro_name, pro_phone, pro_address, pro_detail
+		FROM
+		    member
+		WHERE
+		    idx = #{value}
+	</select>
+</mapper>
+

@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.cash.mapper.CashMapper">
+	
+    <update id="increaseCash" statementType="CALLABLE" parameterType="CashVO">
+    	CALL p_cash_manage(
+			#{mIdx, mode=IN, jdbcType=INTEGER},
+			#{oIdx, mode=IN, jdbcType=INTEGER},
+			#{category, mode=IN, jdbcType=CHAR},
+			#{type, mode=IN, jdbcType=CHAR},
+			#{content, mode=IN, jdbcType=VARCHAR},
+			#{cashIncrease, mode=IN, jdbcType=INTEGER},	
+			#{endDate, mode=IN, jdbcType=VARCHAR},
+	    	#{out, mode=OUT, jdbcType=INTEGER}
+		)
+    </update>
+
+    <sql id="where">
+        <where>
+            <if test='mIdx != null and mIdx != ""'>
+                AND A.m_idx = #{mIdx}
+            </if>
+            <if test='type != null and type != ""'>
+                AND A.type = #{type}
+            </if>
+            <if test="insertDate != null and insertDate != ''">
+                AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &gt;= #{insertDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND DATE_FORMAT(A.insert_date, '%Y-%m-%d') &lt;= #{endDate}
+            </if>
+            <if test="category != null and category != ''">
+                AND A.category = #{category}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    A.content like CONCAT('%', #{keyword},'%')
+                    OR C.name like CONCAT('%', #{keyword},'%')
+                )
+            </if>
+        </where>
+    </sql>
+    
+    <select id="selectCashLogList" parameterType="CashVO" resultType="CashVO">
+        SELECT DATE_FORMAT(A.insert_date, '%y.%m.%d %H:%i:%s') AS insertDate
+              ,CASE WHEN A.category = 'P' then '수입'
+                    WHEN A.category = 'M' then '지출'
+               END AS category
+              ,CASE WHEN A.type = 'I' then '충전'
+                    WHEN A.type = 'S' then '판매'
+                    WHEN A.type = 'R' then '환불'
+                    WHEN A.type = 'B' then '구매'
+                    WHEN A.type = 'O' then '출금'
+                    WHEN A.type = 'E' then '소멸'
+                    WHEN A.type = 'C' then '정산'
+               END AS type
+              ,A.content
+              ,C.name
+              ,A.cash_increase
+        FROM cash_log A
+        LEFT JOIN order_info B ON A.o_idx = B.idx
+        LEFT JOIN member C ON B.m_idx = C.idx
+        <include refid="where"/>
+        ORDER BY A.idx DESC
+        <if test="end != null and end != 0">
+            LIMIT #{start}, #{end}
+        </if>
+    </select>
+    
+    <select id="selectCashLogCnt" parameterType="CashVO" resultType="int">
+        SELECT
+            COUNT(*)
+        FROM cash_log A
+        LEFT JOIN order_info B ON A.o_idx = B.idx
+        LEFT JOIN member C ON B.m_idx = C.idx
+        <include refid="where"/>
+    </select>
+    
+    <resultMap type="map" id="chargePrice">
+        <result property="idx" column="idx" javaType="int"/>
+        <result property="price" column="price" javaType="int"/>
+    </resultMap>
+    
+    <select id="selectChargePriceList" resultMap="chargePrice">
+        SELECT idx, price FROM cash_init
+        ORDER BY idx ASC
+    </select>
+    
+    <select id="selectChargePrice" parameterType="map" resultMap="chargePrice">
+        SELECT idx, price FROM cash_init
+        WHERE idx = #{idx} AND price = #{price}
+    </select>
+    
+    <update id="updateEstiCash" parameterType="hashMap">
+    	UPDATE member 
+		SET 
+			<choose>
+				<when test="inCome != null">
+				    esti_income = esti_income + #{inCome}
+				</when>
+				<when test="outCome != null">
+				    esti_outcome = esti_outcome + #{outCome}
+				</when>
+			</choose>			
+		WHERE
+			<choose>
+				<when test="inCome != null">
+				    idx = #{mIdx}
+				</when>
+				<when test="outCome != null">
+				    idx = (SELECT m_idx FROM order_info WHERE idx = #{oIdx})
+				</when>
+			</choose>
+		    
+    </update>
+
+    <insert id="insertCash" parameterType="CashVO">
+        INSERT INTO cash (
+            m_idx,
+            type,
+            cash,
+            tax_bill,
+            p_goods
+        ) VALUES (
+            #{mIdx},
+            #{type},
+            #{cash},
+            #{taxBill},
+            #{pGoods}
+        );
+        
+        <selectKey keyProperty="idx" resultType="int" order="AFTER">
+            SELECT LAST_INSERT_ID()
+        </selectKey>
+    </insert>
+    
+    <insert id="insertBillByCharge" parameterType="CashVO">
+		INSERT INTO bill_issue (m_idx, `subject`, parent, `type`, amount, fee, state)
+		SELECT 
+		    #{mIdx}, 'A', #{idx}, I.type, #{cash}, #{cash} * 0.1 , 'N'
+		FROM
+		    bill_info I    
+		WHERE
+		    I.m_idx = #{mIdx}    	
+    </insert>
+    
+    <update id="insertCashCode" parameterType="CashVO">
+        UPDATE cash SET
+            cash_code = CONCAT(DATE_FORMAT(CURDATE(), '%Y%m%d'), LPAD(#{idx}, 10, '0'))
+        WHERE idx = #{idx}
+        <selectKey keyProperty="cashCode" resultType="string" order="AFTER">
+            SELECT cash_code FROM cash WHERE idx = #{idx}
+        </selectKey>
+    </update>
+    
+    <update id="updateCash" parameterType="CashVO">
+        UPDATE cash SET
+            state = 'Y',
+            p_amt     = #{pAmt},
+            p_uname   = #{pUname},
+            p_tr_no   = #{pTrNo},
+            p_auth_dt = #{pAuthDt},
+            p_auth_no = #{pAuthNo},
+            p_fn_cd1  = #{pFnCd1},
+            p_fn_cd2  = #{pFnCd2},
+            p_fn_nm   = #{pFnNm},
+            p_int_mon = #{pIntMon}
+        WHERE cash_code = #{cashCode}
+        <selectKey keyProperty="mIdx" resultType="int" order="AFTER">
+            SELECT m_idx FROM cash WHERE cash_code = #{cashCode}
+        </selectKey>
+    </update>
+
+    <select id="selectCash" parameterType="CashVO" resultType="CashVO">
+        SELECT
+            *
+        FROM cash
+        <choose>
+            <when test="idx == null or idx == 0">
+                WHERE cash_code = #{cashCode}
+            </when>
+            <otherwise>
+                WHERE idx = #{idx}
+            </otherwise>
+        </choose>
+        AND m_idx = #{mIdx}
+    </select>
+    
+    <select id="selectCouponList" parameterType="CouponVO" resultType="CouponVO">
+        SELECT 
+            I.*,
+            M.title,
+            M.price,
+            M.end_date,
+            M.mesg
+        FROM
+            coupon_issue I
+                LEFT JOIN
+            coupon_manage M ON I.c_idx = M.idx
+        WHERE
+            I.use_flag = #{useFlag}
+            AND m_idx = #{mIdx}
+        ORDER BY end_date ASC
+        <if test="end != null and end != 0">
+            LIMIT #{start}, #{end}
+        </if>
+    </select>
+    
+    <insert id="insertWithdrawal" parameterType="CashVO">
+    	INSERT INTO withdrawal (m_idx, amount, fee)
+		VALUES (#{mIdx}, #{cashIncrease}, #{fee});
+		
+		<if test='issue != null and issue == "Y"'>
+			INSERT INTO bill_issue (m_idx, parent, `type`, amount, fee, state, update_date)
+			SELECT 
+			    #{mIdx}, LAST_INSERT_ID(), I.type, #{cashIncrease}, #{fee}, 'Y', NOW()
+			FROM
+			    bill_info I    
+			WHERE
+			    I.m_idx = #{mIdx};
+		</if>
+		
+		UPDATE member 
+		SET withdraw_cash = withdraw_cash + (#{cashIncrease} + #{fee})
+		WHERE idx = #{mIdx};
+    </insert>
+    
+    <select id="selectCashList" parameterType="CashVO" resultType="CashVO">
+    	SELECT 
+			 idx,    
+			cash_code,
+			CASE
+			    WHEN type = 'CARD' THEN '카드결제'
+			    WHEN type = 'BANK' THEN '계좌이체'
+			END AS type,
+			cash,
+			DATE_FORMAT(insert_date, '%y.%m.%d %H:%m:%s') AS insertDate,    
+			CASE
+			    WHEN
+			        type = 'CARD'
+			    THEN
+			        CONCAT(p_fn_nm, ' ', IF(p_int_mon = 0, '일시불', CONCAT(p_int_mon + 0, '개월')))
+			    WHEN type = 'BANK' THEN p_fn_nm
+			END AS p_fn_nm,
+			p_amt
+		FROM
+		    cash
+		WHERE
+		    state = 'Y' AND m_idx = #{mIdx}
+		    <if test="insertDate != null and insertDate != '' and endDate != null and endDate != ''">
+				AND DATE(insert_date) between #{insertDate} AND #{endDate} 
+			</if>
+		ORDER BY insert_date DESC
+		LIMIT #{start}, #{end}		    	
+    </select>
+    
+    <select id="selectCashListCnt" parameterType="CashVO" resultType="int">
+    	SELECT 
+			count(idx)			
+		FROM
+		    cash
+		WHERE
+		    state = 'Y' AND m_idx = #{mIdx}
+		    <if test="insertDate != null and insertDate != '' and endDate != null and endDate != ''">
+				AND DATE(insert_date) between #{insertDate} AND #{endDate} 
+			</if>	    	
+    </select>
+    
+    <!-- <select id="selectCashLogCnt" parameterType="CashVO" resultType="int">
+		SELECT count(A.idx)
+        FROM cash_log A
+        LEFT JOIN order_info B ON A.o_idx = B.idx
+        LEFT JOIN member C ON B.m_idx = C.idx
+    	<include refid="where"/>
+    </select> -->
+</mapper>
+

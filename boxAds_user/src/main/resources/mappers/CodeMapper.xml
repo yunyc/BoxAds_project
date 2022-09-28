@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.box.mapper.CodeMapper">
+
+	<select id="settingSelect" resultType="CodeVO">
+		SELECT idx,
+			    parent,
+			    sort,
+			    type,
+			    writer,
+			    name,
+			    depth,
+			    use_flag,
+			    insert_date
+			FROM code_manage
+			WHERE type = 'C' AND depth = 1 AND use_flag = 'Y'
+	UNION
+		 SELECT idx,
+			    parent,
+			    sort,
+			    type,
+			    writer,
+			    name,
+			    depth,
+			    use_flag,
+			    insert_date
+			FROM code_manage
+			WHERE type = 'P' AND depth != 1 AND use_flag = 'Y'
+			ORDER BY sort ASC				
+	</select>
+
+	<select id="selectCodeList" parameterType="CodeVO" resultType="CodeVO">
+		SELECT 
+			idx,
+		    parent,
+		    sort,
+		    type,
+		    writer,
+		    name,
+		    depth,
+		    use_flag,
+		    insert_date
+		FROM code_manage
+		<where>
+			<if test="type != null and type != ''">
+				type = #{type}
+			</if>
+			<if test="useFlag != null and useFlag != ''">
+				AND use_flag = #{useFlag}
+			</if>
+			<if test="depth != null and depth != 0">
+				AND depth = #{depth}
+			</if>
+			<choose>
+				<when test="idx != null and idx != ''">
+					AND idx = #{idx}
+				</when>
+				<when test="parent != null and parent != 0">
+					AND parent = #{parent}
+				</when>
+			</choose>			
+		</where>
+		ORDER BY sort, idx DESC
+	</select>
+	
+	<select id="selectCodeName" parameterType="CodeVO" resultType="hashMap">
+		<choose>
+			<when test="depth > 2">
+				SELECT 
+				    C.name AS c1_name,
+				    C2.name AS c2_name 
+				FROM
+				    code_manage C
+				    left join code_manage C2 on C.idx = C2.parent 
+				WHERE
+				    C2.idx = #{parent}
+			</when>
+			<otherwise>
+				SELECT 
+				    C.name AS c1_name				     
+				FROM
+				    code_manage C				     
+				WHERE
+				    C.idx = #{parent}
+			</otherwise>
+		</choose>
+	</select>
+	
+	
+	
+	<select id="selectUnitInfo" parameterType="hashMap" resultType="hashMap">
+		SELECT  
+		    IF(A.side = 'O', U.one_side, U.two_side) AS unit
+		FROM
+		    unit_manage U
+		        JOIN
+		    ad_product A ON U.c_idx = A.p_c_idx
+		<where>		     
+		    #{bxCnt} BETWEEN min AND max
+		    AND A.idx = #{adIdx}
+		</where>
+	</select>
+	
+	<select id="selectTotalPrice" parameterType="OrderVO" resultType="PriceVO">
+		SELECT 
+		    IF(A.side = 'O', U.one_side, U.two_side) AS prUnit,       
+		    (SELECT price FROM coupon_manage M JOIN coupon_issue I ON M.idx = I.c_idx WHERE I.idx = O.c_idx) AS cpPrice,
+		    O.box_cnt AS boxCnt,
+		    O.pdt_unit AS unit,
+		    O.pdt_unit * O.box_cnt AS adPrice,
+		    TRUNCATE((O.pdt_unit * O.box_cnt) * (per / 100), 0) AS fee,
+		    (O.pdt_unit * O.box_cnt) - TRUNCATE((O.pdt_unit * O.box_cnt) * (per / 100), 0) AS income,
+		    F.per
+		FROM
+		    order_info O
+		        JOIN
+		    ad_product A ON O.a_idx = A.idx
+		        JOIN
+		    box_product B ON O.b_idx = B.idx        
+				JOIN
+		    unit_manage U ON U.c_idx = A.p_c_idx AND O.box_cnt BETWEEN `min` AND `max`
+				LEFT JOIN
+		    fees_manage F ON F.category = 'A'
+		WHERE O.idx = #{idx}		    	
+	</select>
+	
+	<select id="selectTotalPriceBefore" parameterType="OrderVO" resultType="PriceVO">
+		SELECT 
+			IF(A.side = 'O', U.one_side, U.two_side) AS prUnit,      
+			IF(A.side = 'O', U.one_side, U.two_side) * B.box_cnt AS prPrice,
+			(SELECT price FROM coupon_manage M JOIN coupon_issue I ON M.idx = I.c_idx WHERE I.idx = #{cIdx}) AS cpPrice,            
+			B.box_cnt,
+			B.unit,
+			B.unit * B.box_cnt AS adPrice
+		FROM		    
+			ad_product A
+				LEFT JOIN
+			box_product B ON B.idx = #{bIdx}
+				LEFT JOIN
+			unit_manage U ON U.c_idx = A.p_c_idx AND B.box_cnt BETWEEN `min` AND `max`				
+		WHERE A.idx = #{aIdx}
+	</select>
+	
+	</mapper>

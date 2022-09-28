@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.main.mapper.BoardMapper">
+
+	<sql id="where">
+	    <where>
+	    	<if test='type != null and type != "" and type != "Q"'>
+				AND B.type = #{type}
+			</if>
+			<if test='type == "Q"'>
+				AND B.parent = 0
+			</if>
+			<if test="idx != null and idx != 0">
+				AND B.idx = #{idx}
+			</if>
+			<if test='state != null and state != "" and type != "Q"'>
+				AND B.state = #{state}
+			</if>
+			<if test="insertDate != null and insertDate != '' and endDate != null and endDate != ''">
+				AND DATE(B.insert_date) between #{insertDate} AND #{endDate}
+			</if>
+			<if test="category != null and category != ''">
+				AND B.category = #{category}
+			</if>
+			<if test="writer != null and writer != 0">
+				AND B.writer = #{writer}
+			</if>
+			<if test='replyFlag != null and replyFlag != ""'>
+				AND B.reply_flag = #{replyFlag}
+			</if>
+			<if test="keyword != null and keyword != ''">
+				<choose>
+					<when test="searchType == 'title'">
+						AND B.title like CONCAT('%', #{keyword},'%')
+					</when>
+					<when test="searchType == 'content'">
+						AND B.content like CONCAT('%', #{keyword},'%')
+					</when>
+					<when test="searchType == 'name'">
+						AND A.name like CONCAT('%', #{keyword},'%')
+					</when>
+				</choose>
+			</if>
+	    </where>
+	</sql>
+
+	<select id="selectBoardList" parameterType="BoardVO" resultType="BoardVO">
+				SELECT B.idx
+					,B.title
+					,B.content
+					,B.type
+					,B.insert_date
+					,B.state
+					,B.notice_flag
+					,B.category
+					,B.ad_group
+					,B.writer
+					,B.view_cnt
+					,F.parent
+					,A.name
+					,C.name categoryName
+					,IF(B.insert_date > date_add(now(), INTERVAL - 14 DAY), 'T', 'F') newFlag
+				FROM board B
+			LEFT JOIN admin A
+					ON B.writer = A.idx
+			LEFT JOIN file F
+					ON B.idx = F.parent AND F.type = 'N'
+			LEFT JOIN code_manage C
+					ON B.category = C.idx
+				<include refid="where"/>
+			AND B.state = 'Y'
+			GROUP BY B.idx
+			ORDER BY B.notice_flag DESC, B.insert_date DESC
+			<if test="end != null and end != 0">
+				LIMIT #{start}, #{end}
+			</if>
+		
+	</select>
+	
+	<delete id="deleteBoardList" parameterType="BoardVO">
+		DELETE FROM board
+				WHERE idx = #{idx} 
+				<if test='type != null and type != ""'>
+					AND B.type = #{type}
+				</if>
+	</delete>
+	
+	<select id="selectQnaList" parameterType="BoardVO" resultType="BoardVO">
+			SELECT DISTINCT B.idx
+								,B.title
+								,B.content
+								,B.insert_date
+								,B.view_cnt
+								,(CASE WHEN B.reply_flag = 'Y' THEN '답변완료'
+												  		  ELSE '답변대기' END) reply_flag
+								,A.name
+								,A.id email	
+								,F.parent
+								,(SELECT insert_date FROM board_qna
+													WHERE parent = B.idx
+													ORDER BY insert_date desc
+				   									LIMIT 1) replyDate
+						FROM board_qna B
+				 LEFT JOIN member A
+						  ON B.writer = A.idx
+				LEFT JOIN file F
+				ON F.parent = B.idx
+				<include refid="where"/>
+				ORDER BY B.insert_date DESC
+				<if test="end != null and end != 0">
+				LIMIT #{start}, #{end}
+			</if>
+	</select>
+	
+	<insert id="insertQnaList" useGeneratedKeys="true" keyProperty="idx" parameterType="BoardVO">
+		INSERT INTO board_qna(parent, title, content, writer)
+			VALUES(#{parent}, #{title}, #{content}, #{writer})
+	</insert>
+	
+	<delete id="deleteQnaList" parameterType="BoardVO">
+		DELETE FROM board_qna
+			WHERE idx = #{idx}
+	</delete>
+	
+	<delete id="deleteReplyList" parameterType="BoardVO">
+		DELETE FROM board_qna
+			WHERE parent = #{idx}
+	</delete>
+	
+	<select id="selectReplyList" parameterType="BoardVO" resultType="BoardVO">
+		 SELECT q.idx
+						,q.content
+						,q.parent
+						,q.insert_date
+						,a.name			
+				FROM board_qna q
+		 LEFT JOIN admin a
+				  ON q.writer = a.idx
+				  WHERE parent = #{idx}					
+	</select>
+	
+	<select id="selectBoardCnt" parameterType="BoardVO" resultType="map">
+		<choose>
+			<when test='type == "Q"'>
+				SELECT count(B.idx) boardCnt
+					FROM board_qna B
+				LEFT JOIN member A
+						ON B.writer = A.idx
+				    <include refid="where"/>
+			</when>
+			<otherwise>
+				SELECT count(B.idx) boardCnt
+				  FROM board B
+			 LEFT JOIN admin A
+		    	    ON B.writer = A.idx
+		    <include refid="where" />
+			</otherwise>
+		</choose>
+		
+		
+	</select>
+	
+	<select id="selectTerms" parameterType="BoardVO" resultType="BoardVO">
+		SELECT *
+		FROM terms
+		WHERE type = #{type}
+	</select>
+	
+	<select id="selectCodeList" resultType="map">
+		SELECT idx
+      		  ,name
+   	      FROM code_manage
+   	     WHERE TYPE = 'F' AND use_flag = 'Y'
+	</select>
+</mapper>
+

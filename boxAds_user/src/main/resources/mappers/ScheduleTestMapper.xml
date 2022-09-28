@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.schedule.mapper.ScheduleTestMapper">
+
+<sql id="where">
+	<where>
+		<if test="state != null and state != ''">
+		    AND O.state = #{state}
+		</if>
+		<if test="insertDate != null and insertDate == 'now'">
+			<choose>
+				<when test='state != null and state == "B3" and temp != null and temp == "img1"'>
+					AND TIMESTAMPDIFF(MINUTE, DATE_FORMAT(insert_date, '%Y-%m-%d %H:%i'), NOW()) = 60
+				</when>
+				<when test='state != null and state == "B4" and temp != null and temp == "img2"'>
+					AND TIMESTAMPDIFF(MINUTE, DATE_FORMAT(insert_date, '%Y-%m-%d %H:%i'), NOW()) = 90
+				</when>
+				<when test='state != null and state == "B6" and temp != null and temp == "calcul"'>
+					AND TIMESTAMPDIFF(MINUTE, DATE_FORMAT(insert_date, '%Y-%m-%d %H:%i'), NOW()) = 130
+				</when>
+				<when test='state != null and state == "B6" and temp != null and temp == "end"'>
+					AND TIMESTAMPDIFF(MINUTE, DATE_FORMAT(insert_date, '%Y-%m-%d %H:%i'), NOW()) = 130
+				</when>
+				<when test='state != null and state == "B3" and temp != null and temp == "img1Chk"'>
+					AND TIMESTAMPDIFF(MINUTE, DATE_FORMAT(O.insert_date, '%Y-%m-%d %H:%i'), NOW()) = 70
+				</when>
+				<when test='state != null and state == "B4" and temp != null and temp == "img2Chk"'>
+					AND TIMESTAMPDIFF(MINUTE, DATE_FORMAT(O.insert_date, '%Y-%m-%d %H:%i'), NOW()) = 100
+				</when>
+				<otherwise>
+				    AND DATE_FORMAT(O.insert_date, '%Y-%m-%d') = DATE_FORMAT(NOW(), '%Y-%m-%d')				
+				</otherwise>
+			</choose>
+		</if>
+	</where>
+</sql>
+
+    <update id="callTestPro" statementType="CALLABLE" parameterType="hashMap">
+    	CALL p_test_batch_job(#{out, mode=OUT, jdbcType=INTEGER})
+    </update>
+    
+    <select id="selectOrderInfoForScheduleTest" parameterType="OrderVO" resultType="OrderVO">
+		SELECT 
+		    O.idx,
+		    O.state    
+		FROM
+		    order_info O
+		    <choose>
+		    	<when test="temp != null and state == 'boxEnd'  ">
+			    	JOIN
+					    box_product B ON B.idx = O.b_idx AND B.state = 'E'
+			    	WHERE
+			        	-60 = TIMESTAMPDIFF(MINUTE, DATE_FORMAT(B.sell_date, '%Y-%m-%d %H:%i'), NOW())
+			        	AND O.state LIKE #{temp}
+		    	</when>	
+		    	<when test="temp != null and state == 'adEnd'">
+			    	JOIN
+					    ad_product A ON A.idx = O.a_idx AND A.state = 'E'
+					WHERE
+						0 = TIMESTAMPDIFF(MINUTE, DATE_FORMAT(A.ad_end_date, '%Y-%m-%d %H:%i'), NOW())					    
+			        	AND O.state LIKE #{temp}
+		    	</when>		    	
+		    	<otherwise>
+					<include refid="where"/>
+		    	</otherwise>
+		    </choose>
+	</select>
+	
+	<select id="selectScheduleLogImgChkTest" parameterType="hashMap" resultType="hashMap">
+		SELECT 
+		    COUNT(F.idx) AS chk, GROUP_CONCAT(O.idx) AS oIdxArr
+		FROM
+		    order_info O
+		        JOIN
+		    process_log P ON P.o_idx = O.idx
+		        LEFT JOIN
+		    file F ON F.parent = P.idx AND F.type = #{type}		
+		    <include refid="where"/>
+		GROUP BY P.idx
+		LIMIT 1
+	</select>
+	
+</mapper>
+

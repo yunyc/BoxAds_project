@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+ 
+<mapper namespace="com.boxads.etc.mapper.CouponMapper">
+
+	<select id="selectCoupon" parameterType="CouponVO" resultType="CouponVO">
+		SELECT 
+		    idx
+		FROM
+		    coupon_manage
+		<where>
+			AND state = 'Y' 
+			AND use_flag = 'Y'
+			AND (total_cnt - issue_cnt) > 0
+			<if test="target != null and target != ''">
+				AND target = #{target}
+			</if>
+		</where>
+	</select>
+	
+	<insert id="insertCouponIssue" parameterType="hashMap">
+		INSERT INTO coupon_issue (idx, c_idx, m_idx)
+		VALUES
+		<foreach collection="list" item="item" separator=",">		
+			(if(#{item.idx} != '', #{item.idx}, NULL), #{item.c_idx}, #{item.m_idx})
+		</foreach>
+	</insert>
+	
+	<update id="updateCouponIssue" parameterType="hashMap">
+		UPDATE coupon_issue 
+		SET use_flag = #{useFlag}, 
+			use_date = now()
+		WHERE idx = #{idx}
+	</update>
+	
+	<update id="updateCouponCnt" parameterType="hashMap">
+		UPDATE coupon_manage 
+		SET issue_cnt = issue_cnt + 1
+		<where>
+			idx in (
+			<foreach collection="list" item="item" separator=",">		
+				#{item.c_idx}
+			</foreach>
+			)
+		</where>
+	</update>
+	
+	<select id="selectCouponList" parameterType="CouponVO" resultType="CouponVO">
+		SELECT 
+		    I.*,
+		    M.title,
+		    M.price,
+            M.end_date,
+            M.mesg
+		FROM
+		    coupon_issue I
+		        LEFT JOIN
+		    coupon_manage M ON I.c_idx = M.idx
+		WHERE
+			I.use_flag = #{useFlag}
+		    AND m_idx = #{mIdx}
+	</select>
+
+	<select id="issueChkCoupon" parameterType="CouponVO" resultType="int">
+		SELECT 
+		    COUNT(*) AS cpChk
+		FROM
+		    coupon_issue I
+		        JOIN
+		    coupon_manage M ON M.idx = I.c_idx
+		WHERE
+		    M.target = #{target} AND I.m_idx = #{mIdx}
+	</select>
+</mapper>
+
